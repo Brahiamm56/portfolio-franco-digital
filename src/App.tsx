@@ -1,10 +1,14 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { gsap } from 'gsap'
+import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import francoLogo from './assets/franco-digital-logo.png'
 import basketballAction from './assets/projects/basketball-action.jpg'
 import bnBasketball from './assets/projects/bn-basketball.jpg'
 import karting from './assets/projects/karting.jpg'
 import p27Event from './assets/projects/p27-event.jpg'
 import './App.css'
+
+gsap.registerPlugin(ScrollTrigger)
 
 const projects = [
   {
@@ -57,6 +61,202 @@ const services = [
 
 function App() {
   const [menuOpen, setMenuOpen] = useState(false)
+  const rootRef = useRef<HTMLElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const menuHasOpened = useRef(false)
+
+  useLayoutEffect(() => {
+    if (!rootRef.current) return
+
+    const context = gsap.context(() => {
+      gsap.from('.site-header', { y: -24, duration: 0.58, ease: 'power3.out', immediateRender: false })
+      gsap.from('.hero-meta > *', { y: 14, stagger: 0.055, duration: 0.42, delay: 0.08, ease: 'power3.out', immediateRender: false })
+      gsap.from('.hero-kicker', { y: 18, duration: 0.42, delay: 0.14, ease: 'power3.out', immediateRender: false })
+      gsap.from('.hero h1', { y: 52, duration: 0.64, delay: 0.16, ease: 'power3.out', immediateRender: false })
+      gsap.from('.hero-intro', { y: 22, duration: 0.5, delay: 0.28, ease: 'power3.out', immediateRender: false })
+      gsap.from('.hero .text-link', { y: 18, duration: 0.46, delay: 0.34, ease: 'power3.out', immediateRender: false })
+      gsap.from('.hero-orbit', { scale: 0.68, rotation: -38, duration: 0.58, delay: 0.2, ease: 'power3.out', immediateRender: false })
+
+      gsap.to('.hero-orbit', {
+        rotation: 120,
+        yPercent: 32,
+        ease: 'none',
+        scrollTrigger: {
+          trigger: '.hero',
+          start: 'top top',
+          end: 'bottom top',
+          scrub: 1.2,
+        },
+      })
+
+      gsap.to('.hero-copy', {
+        yPercent: -7,
+        ease: 'none',
+        scrollTrigger: {
+          trigger: '.hero',
+          start: 'top top',
+          end: 'bottom top',
+          scrub: 1,
+        },
+      })
+
+      gsap.utils.toArray<HTMLElement>('.section-frame').forEach((section) => {
+        const headingElements = section.querySelectorAll('.eyebrow, h2, .section-note')
+        let revealed = false
+        const startAt = () => Math.max(0, section.getBoundingClientRect().top + window.scrollY - window.innerHeight * 0.82)
+        const reveal = () => {
+          if (revealed) return
+          revealed = true
+          gsap.to(headingElements, {
+            y: 0,
+            autoAlpha: 1,
+            stagger: 0.09,
+            duration: 0.9,
+            ease: 'power3.out',
+          })
+        }
+
+        gsap.set(headingElements, { y: 52, autoAlpha: 0 })
+        ScrollTrigger.create({
+          start: startAt,
+          end: 'max',
+          invalidateOnRefresh: true,
+          once: true,
+          onEnter: reveal,
+        })
+
+        if (window.scrollY >= startAt()) reveal()
+      })
+
+      const revealGroups = [
+        {
+          targets: '.project-card',
+          trigger: '.project-grid',
+          from: { y: 100, autoAlpha: 0 },
+          to: { y: 0, autoAlpha: 1, stagger: 0.14, duration: 1.05, ease: 'power3.out' },
+          threshold: 0.78,
+        },
+        {
+          targets: '.service-item',
+          trigger: '.service-list',
+          from: { x: -64, autoAlpha: 0 },
+          to: { x: 0, autoAlpha: 1, stagger: 0.12, duration: 0.9, ease: 'power3.out' },
+          threshold: 0.82,
+        },
+        {
+          targets: '.about-content > *',
+          trigger: '.about-content',
+          from: { y: 65, autoAlpha: 0 },
+          to: { y: 0, autoAlpha: 1, stagger: 0.16, duration: 1, ease: 'power3.out' },
+          threshold: 0.82,
+        },
+        {
+          targets: '.contact-inner > *, .contact-footer > *',
+          trigger: '.contact-section',
+          from: { y: 55, autoAlpha: 0 },
+          to: { y: 0, autoAlpha: 1, stagger: 0.1, duration: 0.85, ease: 'power3.out' },
+          threshold: 0.76,
+        },
+      ]
+
+      revealGroups.forEach((group) => {
+        const trigger = rootRef.current?.querySelector<HTMLElement>(group.trigger)
+        const targets = rootRef.current?.querySelectorAll<HTMLElement>(group.targets)
+        if (!trigger || !targets?.length) return
+
+        let revealed = false
+        const startAt = () => Math.max(0, trigger.getBoundingClientRect().top + window.scrollY - window.innerHeight * group.threshold)
+        const reveal = () => {
+          if (revealed) return
+          revealed = true
+          gsap.to(targets, group.to)
+        }
+
+        gsap.set(targets, group.from)
+        ScrollTrigger.create({
+          start: startAt,
+          end: 'max',
+          invalidateOnRefresh: true,
+          once: true,
+          onEnter: reveal,
+        })
+
+        if (window.scrollY >= startAt()) reveal()
+      })
+
+      if (window.matchMedia('(max-width: 760px)').matches) {
+        const wordmark = rootRef.current?.querySelector<HTMLElement>('.wordmark')
+        const brandLockup = rootRef.current?.querySelector<HTMLElement>('.brand-lockup')
+
+        if (wordmark && brandLockup) {
+          const expandedWidth = wordmark.getBoundingClientRect().width
+
+          const collapseBrand = () => {
+            gsap.to(wordmark, { width: 0, x: -14, autoAlpha: 0, duration: 0.42, ease: 'power3.out', overwrite: true })
+            gsap.to(brandLockup, { gap: 0, duration: 0.42, ease: 'power3.out', overwrite: true })
+          }
+
+          const expandBrand = () => {
+            gsap.to(wordmark, { width: expandedWidth, x: 0, autoAlpha: 1, duration: 0.42, ease: 'power3.out', overwrite: true })
+            gsap.to(brandLockup, { gap: '0.7rem', duration: 0.42, ease: 'power3.out', overwrite: true })
+          }
+
+          ScrollTrigger.create({
+            start: 60,
+            end: 'max',
+            onEnter: collapseBrand,
+            onLeaveBack: expandBrand,
+          })
+
+          if (window.scrollY > 60) collapseBrand()
+        }
+      }
+    }, rootRef)
+
+    document.fonts.ready.then(() => ScrollTrigger.refresh())
+
+    return () => {
+      context.revert()
+    }
+  }, [])
+
+  useLayoutEffect(() => {
+    const overlay = menuRef.current
+    if (!overlay) return
+
+    const links = overlay.querySelectorAll('.menu-navigation a')
+    const footer = overlay.querySelector('.menu-overlay__footer')
+    if (!menuOpen && !menuHasOpened.current) {
+      gsap.set(overlay, { autoAlpha: 0, clipPath: 'inset(0 0 100% 0)', pointerEvents: 'none' })
+      gsap.set([links, footer], { autoAlpha: 0 })
+      return
+    }
+
+    const timeline = gsap.timeline()
+
+    if (menuOpen) {
+      menuHasOpened.current = true
+      timeline
+        .set(overlay, { visibility: 'visible', pointerEvents: 'auto' })
+        .fromTo(
+          overlay,
+          { autoAlpha: 0, clipPath: 'inset(0 0 100% 0)', filter: 'blur(10px)' },
+          { autoAlpha: 1, clipPath: 'inset(0 0 0% 0)', filter: 'blur(0px)', duration: 0.72, ease: 'power4.inOut' },
+        )
+        .fromTo(links, { y: 58, autoAlpha: 0 }, { y: 0, autoAlpha: 1, stagger: 0.075, duration: 0.58, ease: 'power3.out' }, '-=0.35')
+        .fromTo(footer, { y: 20, autoAlpha: 0 }, { y: 0, autoAlpha: 1, duration: 0.45, ease: 'power2.out' }, '-=0.2')
+    } else {
+      timeline
+        .to(links, { y: -20, autoAlpha: 0, stagger: 0.035, duration: 0.25, ease: 'power2.in' })
+        .to(footer, { y: -12, autoAlpha: 0, duration: 0.2 }, '<')
+        .to(overlay, { autoAlpha: 0, clipPath: 'inset(0 0 100% 0)', filter: 'blur(8px)', duration: 0.55, ease: 'power4.inOut' }, '-=0.08')
+        .set(overlay, { visibility: 'hidden', pointerEvents: 'none', filter: 'none' })
+    }
+
+    return () => {
+      timeline.kill()
+    }
+  }, [menuOpen])
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -74,8 +274,15 @@ function App() {
 
   const closeMenu = () => setMenuOpen(false)
 
+  const animateProjectOpen = (event: React.MouseEvent<HTMLAnchorElement>) => {
+    gsap
+      .timeline()
+      .to(event.currentTarget, { scale: 0.975, duration: 0.13, ease: 'power2.out' })
+      .to(event.currentTarget, { scale: 1, duration: 0.28, ease: 'back.out(2)' })
+  }
+
   return (
-    <main className="site-shell">
+    <main className="site-shell" ref={rootRef}>
       <header className="site-header">
         <a className="brand-lockup" href="#top" aria-label="Franco Digital, inicio">
           <img className="brand-logo" src={francoLogo} alt="Logo de Franco Digital" />
@@ -105,6 +312,7 @@ function App() {
         className={`menu-overlay ${menuOpen ? 'is-open' : ''}`}
         id="fullscreen-menu"
         aria-hidden={!menuOpen}
+        ref={menuRef}
       >
         <nav className="menu-navigation" aria-label="Menú principal">
           <a href="#work" onClick={closeMenu} tabIndex={menuOpen ? 0 : -1}>
@@ -177,7 +385,7 @@ function App() {
 
         <div className="project-grid">
           {projects.map((project) => (
-            <a className="project-card" href={project.href} target="_blank" rel="noreferrer" key={project.number}>
+            <a className="project-card" href={project.href} target="_blank" rel="noreferrer" key={project.number} onClick={animateProjectOpen}>
               <div className="project-art">
                 <img src={project.image} alt={project.title} loading="lazy" />
                 <span className="art-label">{project.number}</span>
