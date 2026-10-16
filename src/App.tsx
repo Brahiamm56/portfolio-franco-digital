@@ -1,22 +1,23 @@
+import francoLogo from './assets/franco-digital-logo.png'
 import './App.css'
 
 const projects = [
   {
     number: '01',
     title: 'Dirección visual',
-    type: 'Branding / Art direction',
+    type: 'Branding / Dirección de arte',
     tone: 'project-card--lime',
   },
   {
     number: '02',
     title: 'Materia y luz',
-    type: 'Photography / Editorial',
+    type: 'Fotografía profesional / Deportiva',
     tone: 'project-card--violet',
   },
   {
     number: '03',
     title: 'Forma en movimiento',
-    type: 'Digital / Motion',
+    type: 'Contenido / Community Manager',
     tone: 'project-card--orange',
   },
 ]
@@ -25,9 +26,12 @@ function App() {
   return (
     <main className="site-shell">
       <header className="site-header">
-        <a className="wordmark" href="#top" aria-label="Franco Digital, inicio">
-          <span>FRANCO</span>
-          <span>DIGITAL</span>
+        <a className="brand-lockup" href="#top" aria-label="Franco Digital, inicio">
+          <img className="brand-logo" src={francoLogo} alt="Logo de Franco Digital" />
+          <span className="wordmark">
+            <strong>FRANCO DIGITAL</strong>
+            <small>Diseñador gráfico <i>/</i> fotógrafo profesional</small>
+          </span>
         </a>
 
         <nav className="main-nav" aria-label="Navegación principal">
@@ -43,20 +47,20 @@ function App() {
 
       <section className="hero" id="top" aria-labelledby="hero-title">
         <div className="hero-meta eyebrow">
-          <span>Diseñador & fotógrafo digital</span>
+          <span>Diseñador gráfico / Fotógrafo profesional</span>
           <span>Buenos Aires / Remoto</span>
         </div>
 
         <div className="hero-copy">
-          <p className="hero-kicker">Portfolio 2026</p>
+          <p className="hero-kicker">Branding · CM · Fotografía profesional</p>
           <h1 id="hero-title">
             Diseño que <em>se mueve.</em>
             <br />
             Imágenes que quedan.
           </h1>
           <p className="hero-intro">
-            Una selección de identidades, experiencias y fotografías construidas para
-            marcas que quieren dejar una impresión clara.
+            Identidad visual, contenido y fotografía para marcas, clubes y proyectos
+            que quieren comunicar con una imagen propia.
           </p>
           <a className="text-link" href="#work">
             <span>Explorar proyectos</span>
@@ -123,16 +127,15 @@ function App() {
         <div className="contact-inner">
           <p className="eyebrow">¿Hacemos algo?</p>
           <h2 id="contact-title">Tu próxima idea<br /><em>empieza acá.</em></h2>
-          <a className="contact-link" href="mailto:hola@francodigital.com">
-            hola@francodigital.com <span aria-hidden="true">↗</span>
+          <a className="contact-link" href="https://www.instagram.com/francodigital__/" target="_blank" rel="noreferrer">
+            @francodigital__ <span aria-hidden="true">↗</span>
           </a>
         </div>
         <div className="contact-footer">
           <span>© 2026 Franco Digital</span>
           <div className="social-links">
-            <a href="#contact">Instagram</a>
-            <a href="#contact">Behance</a>
-            <a href="#contact">LinkedIn</a>
+            <a href="https://www.instagram.com/francodigital__/" target="_blank" rel="noreferrer">Instagram</a>
+            <a href="https://wa.link/fkcz37" target="_blank" rel="noreferrer">WhatsApp</a>
           </div>
           <span>Volver arriba ↑</span>
         </div>

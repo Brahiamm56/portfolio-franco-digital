@@ -1,9 +1,9 @@
 :root {
-  --ink: #1a1a18;
-  --muted: #797872;
-  --paper: #f3f1eb;
-  --line: rgba(26, 26, 24, 0.18);
-  --accent: #ccff3d;
+  --ink: #f4f3ef;
+  --muted: #9d9d9a;
+  --paper: #08090b;
+  --line: rgba(244, 243, 239, 0.18);
+  --accent: #f50d2a;
   --mono: 'DM Mono', monospace;
 }
 
@@ -12,6 +12,7 @@
   margin: 0 auto;
   overflow: hidden;
   background: var(--paper);
+  color: var(--ink);
 }
 
 .site-header,
@@ -33,21 +34,47 @@
   text-transform: uppercase;
 }
 
+.brand-lockup {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.7rem;
+  width: fit-content;
+}
+
+.brand-logo {
+  width: 45px;
+  height: 45px;
+  object-fit: contain;
+  border-radius: 50%;
+}
+
 .wordmark {
   display: inline-flex;
   flex-direction: column;
   width: fit-content;
   line-height: 0.94;
+  gap: 0.35rem;
+}
+
+.wordmark strong {
   font-family: 'Manrope', sans-serif;
   font-size: 0.92rem;
   font-weight: 800;
   letter-spacing: -0.06em;
 }
 
-.wordmark span:last-child {
+.wordmark small {
   color: var(--muted);
-  font-size: 0.63rem;
-  letter-spacing: 0.08em;
+  font-family: var(--mono);
+  font-size: 0.54rem;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.wordmark i {
+  color: var(--accent);
+  font-style: normal;
 }
 
 .main-nav {
@@ -79,8 +106,8 @@
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #a4d727;
-  box-shadow: 0 0 0 4px rgba(164, 215, 39, 0.15);
+  background: var(--accent);
+  box-shadow: 0 0 0 4px rgba(245, 13, 42, 0.15);
 }
 
 .hero {
@@ -421,8 +448,8 @@ h2 em {
   min-height: 650px;
   padding-top: clamp(5rem, 10vw, 10rem);
   padding-bottom: 2rem;
-  background: var(--ink);
-  color: var(--paper);
+  background: var(--accent);
+  color: #f4f3ef;
 }
 
 .contact-inner {
@@ -442,7 +469,7 @@ h2 em {
   display: inline-flex;
   align-items: center;
   gap: 1rem;
-  border-bottom: 1px solid rgba(243, 241, 235, 0.5);
+  border-bottom: 1px solid rgba(244, 243, 239, 0.65);
   padding-bottom: 0.75rem;
   font-family: var(--mono);
   font-size: clamp(0.75rem, 1.4vw, 1rem);
@@ -451,10 +478,10 @@ h2 em {
 
 .contact-link:hover {
   gap: 1.5rem;
-  border-color: var(--accent);
+  border-color: #08090b;
 }
 
-.contact-link span { color: var(--accent); font-size: 1.25rem; }
+.contact-link span { color: #08090b; font-size: 1.25rem; }
 
 .contact-footer {
   display: grid;
