@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import francoLogo from './assets/franco-digital-logo.png'
 import basketballAction from './assets/projects/basketball-action.jpg'
 import bnBasketball from './assets/projects/bn-basketball.jpg'
@@ -36,7 +37,43 @@ const projects = [
   },
 ]
 
+const services = [
+  {
+    number: '01',
+    title: 'Branding',
+    description: 'Identidades visuales con una dirección clara, consistente y preparada para crecer.',
+  },
+  {
+    number: '02',
+    title: 'Community Manager',
+    description: 'Estrategia, diseño y contenido para construir una presencia activa en redes.',
+  },
+  {
+    number: '03',
+    title: 'Fotografía profesional',
+    description: 'Coberturas deportivas, eventos y contenido visual que conserva la energía del momento.',
+  },
+]
+
 function App() {
+  const [menuOpen, setMenuOpen] = useState(false)
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMenuOpen(false)
+    }
+
+    document.body.classList.toggle('menu-visible', menuOpen)
+    window.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      document.body.classList.remove('menu-visible')
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [menuOpen])
+
+  const closeMenu = () => setMenuOpen(false)
+
   return (
     <main className="site-shell">
       <header className="site-header">
@@ -48,21 +85,60 @@ function App() {
           </span>
         </a>
 
-        <nav className="main-nav" aria-label="Navegación principal">
-          <a href="#work">Trabajo</a>
-          <a href="#about">Sobre mí</a>
-          <a href="#contact">Contacto</a>
+        <button
+          className={`menu-toggle ${menuOpen ? 'is-active' : ''}`}
+          type="button"
+          aria-label={menuOpen ? 'Cerrar menú' : 'Abrir menú'}
+          aria-controls="fullscreen-menu"
+          aria-expanded={menuOpen}
+          onClick={() => setMenuOpen((open) => !open)}
+        >
+          <span className="menu-toggle__label">{menuOpen ? 'Cerrar' : 'Menú'}</span>
+          <span className="menu-toggle__icon" aria-hidden="true">
+            <i />
+            <i />
+          </span>
+        </button>
+      </header>
+
+      <div
+        className={`menu-overlay ${menuOpen ? 'is-open' : ''}`}
+        id="fullscreen-menu"
+        aria-hidden={!menuOpen}
+      >
+        <nav className="menu-navigation" aria-label="Menú principal">
+          <a href="#work" onClick={closeMenu} tabIndex={menuOpen ? 0 : -1}>
+            <span>01</span> Proyectos
+          </a>
+          <a href="#services" onClick={closeMenu} tabIndex={menuOpen ? 0 : -1}>
+            <span>02</span> ¿Qué necesitás?
+          </a>
+          <a href="#about" onClick={closeMenu} tabIndex={menuOpen ? 0 : -1}>
+            <span>03</span> Sobre mí
+          </a>
+          <a href="#contact" onClick={closeMenu} tabIndex={menuOpen ? 0 : -1}>
+            <span>04</span> Contacto
+          </a>
         </nav>
 
-        <a className="header-index" href="#contact">
-          <span className="status-dot" aria-hidden="true" /> Disponible para proyectos
-        </a>
-      </header>
+        <div className="menu-overlay__footer">
+          <span>Diseño gráfico · Fotografía · Contenido</span>
+          <a href="https://www.instagram.com/francodigital__/" target="_blank" rel="noreferrer" tabIndex={menuOpen ? 0 : -1}>
+            @francodigital__ ↗
+          </a>
+        </div>
+      </div>
 
       <section className="hero" id="top" aria-labelledby="hero-title">
         <div className="hero-meta eyebrow">
           <span>Diseñador gráfico / Fotógrafo profesional</span>
-          <span>Buenos Aires / Remoto</span>
+          <span className="country-flag" role="img" aria-label="Argentina">
+            <svg viewBox="0 0 30 20" aria-hidden="true">
+              <path fill="#74acdf" d="M0 0h30v20H0z" />
+              <path fill="#fff" d="M0 6.67h30v6.66H0z" />
+              <circle cx="15" cy="10" r="2" fill="#f6b40e" />
+            </svg>
+          </span>
         </div>
 
         <div className="hero-copy">
@@ -112,6 +188,27 @@ function App() {
                 <span className="project-arrow" aria-hidden="true">↗</span>
               </div>
             </a>
+          ))}
+        </div>
+      </section>
+
+      <section className="services-section section-frame" id="services" aria-labelledby="services-title">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">¿Qué necesitás?</p>
+            <h2 id="services-title">Una imagen que trabaje<br />a favor de tu proyecto.</h2>
+          </div>
+          <p className="section-note">Servicios / 03</p>
+        </div>
+
+        <div className="service-list">
+          {services.map((service) => (
+            <article className="service-item" key={service.number}>
+              <span>{service.number}</span>
+              <h3>{service.title}</h3>
+              <p>{service.description}</p>
+              <span aria-hidden="true">↗</span>
+            </article>
           ))}
         </div>
       </section>
