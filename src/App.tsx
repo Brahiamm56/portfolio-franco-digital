@@ -1,24 +1,38 @@
 import francoLogo from './assets/franco-digital-logo.png'
+import basketballAction from './assets/projects/basketball-action.jpg'
+import bnBasketball from './assets/projects/bn-basketball.jpg'
+import karting from './assets/projects/karting.jpg'
+import p27Event from './assets/projects/p27-event.jpg'
 import './App.css'
 
 const projects = [
   {
     number: '01',
-    title: 'Dirección visual',
-    type: 'Branding / Dirección de arte',
-    tone: 'project-card--lime',
+    title: 'B&N — Identidad en cancha',
+    type: 'Dirección visual / Básquet',
+    image: bnBasketball,
+    href: 'https://www.instagram.com/francodigital__/p/Deh6I3skSRG/',
   },
   {
     number: '02',
-    title: 'Materia y luz',
-    type: 'Fotografía profesional / Deportiva',
-    tone: 'project-card--violet',
+    title: 'P27 La Leonesa',
+    type: 'Cobertura / Contenido',
+    image: p27Event,
+    href: 'https://www.instagram.com/francodigital__/p/DdM5u_Lkcqh/',
   },
   {
     number: '03',
-    title: 'Forma en movimiento',
-    type: 'Contenido / Community Manager',
-    tone: 'project-card--orange',
+    title: 'Postales de una gran jornada',
+    type: 'Fotografía deportiva / Básquet',
+    image: basketballAction,
+    href: 'https://www.instagram.com/francodigital__/p/Dcj3S0UkTy1/',
+  },
+  {
+    number: '04',
+    title: 'Karting al atardecer',
+    type: 'Fotografía / Automovilismo',
+    image: karting,
+    href: 'https://www.instagram.com/francodigital__/p/Db6qI2SkW3q/',
   },
 ]
 
@@ -82,15 +96,14 @@ function App() {
             <p className="eyebrow">Selección de trabajo</p>
             <h2 id="work-title">Proyectos que hablan<br />por sí solos.</h2>
           </div>
-          <p className="section-note">01—03 / Casos seleccionados</p>
+          <p className="section-note">01—04 / Casos seleccionados</p>
         </div>
 
         <div className="project-grid">
           {projects.map((project) => (
-            <a className={`project-card ${project.tone}`} href="#contact" key={project.number}>
-              <div className="project-art" aria-hidden="true">
-                <span className="art-shape art-shape--one" />
-                <span className="art-shape art-shape--two" />
+            <a className="project-card" href={project.href} target="_blank" rel="noreferrer" key={project.number}>
+              <div className="project-art">
+                <img src={project.image} alt={project.title} loading="lazy" />
                 <span className="art-label">{project.number}</span>
               </div>
               <div className="project-info">
@@ -112,8 +125,9 @@ function App() {
           <h2 id="about-title">Ideas con intención,<br /><em>detalles con carácter.</em></h2>
           <div className="about-copy">
             <p>
-              Trabajo entre el diseño y la fotografía para construir universos visuales
-              que se sienten propios, simples de reconocer y difíciles de olvidar.
+              Trabajo entre el diseño, el contenido y la fotografía para construir una
+              presencia visual reconocible, desde la identidad de marca hasta la cobertura
+              de cada momento.
             </p>
             <a className="text-link" href="#contact">
               <span>Conocer el proceso</span>
@@ -127,15 +141,15 @@ function App() {
         <div className="contact-inner">
           <p className="eyebrow">¿Hacemos algo?</p>
           <h2 id="contact-title">Tu próxima idea<br /><em>empieza acá.</em></h2>
-          <a className="contact-link" href="https://www.instagram.com/francodigital__/" target="_blank" rel="noreferrer">
-            @francodigital__ <span aria-hidden="true">↗</span>
+          <a className="contact-link" href="https://wa.me/5493624080801" target="_blank" rel="noreferrer">
+            +54 9 362 408-0801 <span aria-hidden="true">↗</span>
           </a>
         </div>
         <div className="contact-footer">
           <span>© 2026 Franco Digital</span>
           <div className="social-links">
             <a href="https://www.instagram.com/francodigital__/" target="_blank" rel="noreferrer">Instagram</a>
-            <a href="https://wa.link/fkcz37" target="_blank" rel="noreferrer">WhatsApp</a>
+            <a href="https://wa.me/5493624080801" target="_blank" rel="noreferrer">WhatsApp</a>
           </div>
           <span>Volver arriba ↑</span>
         </div>
