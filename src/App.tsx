@@ -61,9 +61,123 @@ const services = [
 
 function App() {
   const [menuOpen, setMenuOpen] = useState(false)
+  const [introComplete, setIntroComplete] = useState(false)
   const rootRef = useRef<HTMLElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
+  const introRef = useRef<HTMLDivElement>(null)
   const menuHasOpened = useRef(false)
+
+  useLayoutEffect(() => {
+    const overlay = introRef.current
+    if (!overlay) return
+
+    const stage = overlay.querySelector('.intro-logo-stage')
+    const wholeLogo = overlay.querySelector('.intro-logo__whole')
+    const splitLogo = overlay.querySelectorAll('.intro-logo__piece')
+    const leftLogo = overlay.querySelector('.intro-logo__left')
+    const rightLogo = overlay.querySelector('.intro-logo__right')
+    const ring = overlay.querySelector('.intro-ring')
+    const flare = overlay.querySelector('.intro-flare')
+    let finished = false
+    let fallbackId = 0
+
+    const finishIntro = () => {
+      if (finished) return
+      finished = true
+      window.clearTimeout(fallbackId)
+      document.body.classList.remove('intro-visible')
+      setIntroComplete(true)
+    }
+
+    document.body.classList.add('intro-visible')
+    gsap.set(overlay, { autoAlpha: 1 })
+    gsap.set(splitLogo, { autoAlpha: 0 })
+
+    const timeline = gsap.timeline({ onComplete: finishIntro })
+
+    timeline
+      .fromTo(
+        stage,
+        {
+          z: -900,
+          scale: 0.18,
+          rotationX: 52,
+          rotationY: -48,
+          rotationZ: -16,
+          autoAlpha: 0,
+          filter: 'blur(24px)',
+        },
+        {
+          z: 0,
+          scale: 1,
+          rotationX: 0,
+          rotationY: 0,
+          rotationZ: 0,
+          autoAlpha: 1,
+          filter: 'blur(0px)',
+          duration: 0.68,
+          ease: 'expo.out',
+          force3D: true,
+        },
+      )
+      .fromTo(
+        ring,
+        { scale: 0.62, autoAlpha: 0 },
+        { scale: 1.35, autoAlpha: 0.55, duration: 0.3, ease: 'power2.out' },
+        '-=0.3',
+      )
+      .to(ring, { scale: 1.75, autoAlpha: 0, duration: 0.25, ease: 'power2.in' })
+      .to(stage, { scale: 1.07, z: 80, duration: 0.14, ease: 'power2.out' }, '-=0.2')
+      .set(splitLogo, { autoAlpha: 1 })
+      .set(wholeLogo, { autoAlpha: 0 }, '<')
+      .fromTo(
+        flare,
+        { scaleX: 0.06, autoAlpha: 0 },
+        { scaleX: 1, autoAlpha: 0.75, duration: 0.16, ease: 'power2.out' },
+      )
+      .to(
+        leftLogo,
+        {
+          xPercent: -185,
+          z: 240,
+          rotationY: -72,
+          rotationZ: -10,
+          scale: 0.72,
+          autoAlpha: 0,
+          filter: 'blur(14px)',
+          duration: 0.46,
+          ease: 'power3.in',
+          force3D: true,
+        },
+        '<0.03',
+      )
+      .to(
+        rightLogo,
+        {
+          xPercent: 185,
+          z: 240,
+          rotationY: 72,
+          rotationZ: 10,
+          scale: 0.72,
+          autoAlpha: 0,
+          filter: 'blur(14px)',
+          duration: 0.46,
+          ease: 'power3.in',
+          force3D: true,
+        },
+        '<',
+      )
+      .to(flare, { scaleX: 0.12, autoAlpha: 0, duration: 0.26, ease: 'power2.in' }, '<0.08')
+      .to(overlay, { autoAlpha: 0, duration: 0.28, ease: 'power2.out' }, '-=0.08')
+
+    fallbackId = window.setTimeout(finishIntro, 2600)
+
+    return () => {
+      window.clearTimeout(fallbackId)
+      timeline.kill()
+      document.body.classList.remove('intro-visible')
+    }
+  }, [])
 
   useLayoutEffect(() => {
     if (!rootRef.current) return
@@ -283,6 +397,18 @@ function App() {
 
   return (
     <main className="site-shell" ref={rootRef}>
+      {!introComplete && (
+        <div className="intro-screen" ref={introRef} aria-hidden="true">
+          <div className="intro-flare" />
+          <div className="intro-logo-stage">
+            <span className="intro-ring" />
+            <img className="intro-logo__whole" src={francoLogo} alt="" draggable="false" />
+            <img className="intro-logo__piece intro-logo__left" src={francoLogo} alt="" draggable="false" />
+            <img className="intro-logo__piece intro-logo__right" src={francoLogo} alt="" draggable="false" />
+          </div>
+        </div>
+      )}
+
       <header className="site-header">
         <a className="brand-lockup" href="#top" aria-label="Franco Digital, inicio">
           <img className="brand-logo" src={francoLogo} alt="Logo de Franco Digital" />
