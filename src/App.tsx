@@ -3,6 +3,7 @@ import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import francoLogo from './assets/franco-digital-logo.png'
 import francoPortrait from './assets/franco-acuna-portrait.jpg'
+import FlexCarousel from './components/FlexCarousel'
 import { projects, type Project } from './projects'
 import './App.css'
 
@@ -116,7 +117,13 @@ function Intro({ onComplete }: { onComplete: () => void }) {
 }
 
 function ProjectCard({ project, index, navigate }: { project: Project; index: number; navigate: Navigate }) {
-  const [activeImage, setActiveImage] = useState(index % project.images.length)
+  const [activeImage, setActiveImage] = useState(0)
+
+  useEffect(() => {
+    const nextImage = new Image()
+    nextImage.decoding = 'async'
+    nextImage.src = project.images[(activeImage + 1) % project.images.length]
+  }, [activeImage, project.images])
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -143,7 +150,9 @@ function ProjectCard({ project, index, navigate }: { project: Project; index: nu
               className={imageIndex === activeImage ? 'is-active' : ''}
               src={image}
               alt={imageIndex === activeImage ? `${project.title}, imagen ${imageIndex + 1}` : ''}
-              loading={index < 2 && imageIndex === activeImage ? 'eager' : 'lazy'}
+              loading={imageIndex === 0 ? 'eager' : 'lazy'}
+              fetchPriority={index < 2 && imageIndex === 0 ? 'high' : 'auto'}
+              decoding="async"
               key={image}
             />
           ))}
@@ -182,21 +191,56 @@ function HomePage({ navigate }: { navigate: Navigate }) {
           </span>
         </div>
 
-        <div className="hero-copy">
-          <p className="hero-kicker">Branding · CM · Fotografía profesional</p>
-          <h1 id="hero-title">Diseño que <em>se mueve.</em><br />Imágenes que quedan.</h1>
-          <p className="hero-intro">Identidad visual, contenido y fotografía para marcas, clubes y proyectos que quieren comunicar con una imagen propia.</p>
-          <div className="hero-actions">
-            <a className="text-link" href="/#work" onClick={follow('/#work')}>
-              <span>Explorar proyectos</span><span className="link-arrow" aria-hidden="true">↘</span>
-            </a>
-            <a className="instagram-button" href={instagramUrl} target="_blank" rel="noreferrer" aria-label="Ver Instagram de Franco Digital">
-              <InstagramIcon /><span>Instagram</span><i aria-hidden="true">↗</i>
-            </a>
+        <div className="hero-layout">
+          <div className="hero-copy">
+            <p className="hero-kicker">Branding · CM · Fotografía profesional</p>
+            <h1 id="hero-title">Diseño que <em>se mueve.</em><br />Imágenes que quedan.</h1>
+            <p className="hero-intro">Identidad visual, contenido y fotografía para marcas, clubes y proyectos que quieren comunicar con una imagen propia.</p>
+            <div className="hero-actions">
+              <a className="text-link" href="/#work" onClick={follow('/#work')}>
+                <span>Explorar proyectos</span><span className="link-arrow" aria-hidden="true">↘</span>
+              </a>
+              <a className="instagram-button" href={instagramUrl} target="_blank" rel="noreferrer" aria-label="Ver Instagram de Franco Digital">
+                <InstagramIcon /><span>Instagram</span><i aria-hidden="true">↗</i>
+              </a>
+            </div>
+          </div>
+
+          <div className="hero-carousel-wrap">
+            <FlexCarousel
+              items={projects.map((project) => ({
+                src: project.images[0],
+                alt: `${project.title}, portada del proyecto`,
+                title: project.title,
+                subtitle: project.category,
+              }))}
+              preset="liquid"
+              intro="rise"
+              cardHeight={0.56}
+              gap={14}
+              squeeze={0.2}
+              focusOnClick
+              captions
+              fit="natural"
+              radius={4}
+              lensWidth={0.74}
+              lensHeight={1.18}
+              tilt={62}
+              roundness={1}
+              bend={0.34}
+              reach={0.38}
+              curl="twist"
+              dispersion={0.45}
+              liquid={0.08}
+              followCursor={false}
+              autoplay
+              interval={3.2}
+              captureWheel
+              onSelect={(index) => navigate(`/proyectos/${projects[index].slug}`)}
+            />
+            <span className="project-carousel-hint" aria-hidden="true">Scroll / arrastrá para recorrer</span>
           </div>
         </div>
-
-        <div className="hero-index" aria-hidden="true">01 / 07</div>
       </section>
 
       <div className="motion-strip" aria-hidden="true">
@@ -433,12 +477,18 @@ function App() {
   }, [activeProject])
 
   useLayoutEffect(() => {
-    if (!rootRef.current) return
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    if (!rootRef.current || !introComplete) return
 
     const context = gsap.context(() => {
-      gsap.from('.route-view', { autoAlpha: 0, y: 22, duration: 0.58, ease: 'power3.out' })
+      gsap.fromTo(
+        '.route-view',
+        { autoAlpha: 0, y: 22, scale: 0.985 },
+        { autoAlpha: 1, y: 0, scale: 1, duration: 0.58, ease: 'power3.out', clearProps: 'opacity,visibility,transform' },
+      )
       gsap.from('.site-header', { y: -24, duration: 0.58, ease: 'power3.out', immediateRender: false })
+      if (window.matchMedia('(min-width: 761px)').matches) {
+        gsap.from('.desktop-navigation a, .desktop-cta', { y: -10, autoAlpha: 0, stagger: 0.055, duration: 0.42, delay: 0.08, ease: 'power3.out' })
+      }
 
       if (pathname === '/') {
         gsap.from('.hero-meta > *', { y: 14, autoAlpha: 0, stagger: 0.055, duration: 0.42, delay: 0.08, ease: 'power3.out' })
@@ -483,7 +533,7 @@ function App() {
 
     document.fonts.ready.then(() => ScrollTrigger.refresh())
     return () => context.revert()
-  }, [pathname])
+  }, [introComplete, pathname])
 
   useLayoutEffect(() => {
     const overlay = menuRef.current
@@ -538,6 +588,14 @@ function App() {
           <img className="brand-logo" src={francoLogo} alt="Logo de Franco Digital" />
           <span className="wordmark"><strong>FRANCO DIGITAL</strong><small>Diseñador gráfico <i>/</i> fotógrafo profesional</small></span>
         </a>
+        <nav className="desktop-navigation" aria-label="Navegación principal">
+          <a href="/#work" onClick={internalLink('/#work')}><span>01</span>Proyectos</a>
+          <a href="/#services" onClick={internalLink('/#services')}><span>02</span>Servicios</a>
+          <a href="/#about" onClick={internalLink('/#about')}><span>03</span>Sobre mí</a>
+        </nav>
+        <a className="desktop-cta" href={whatsappUrl} target="_blank" rel="noreferrer">
+          <span>Hablemos</span><i aria-hidden="true">↗</i>
+        </a>
         <button className={`menu-toggle ${menuOpen ? 'is-active' : ''}`} type="button" aria-label={menuOpen ? 'Cerrar menú' : 'Abrir menú'} aria-controls="fullscreen-menu" aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}>
           <span className="menu-toggle__label">{menuOpen ? 'Cerrar' : 'Menú'}</span><span className="menu-toggle__icon" aria-hidden="true"><i /><i /></span>
         </button>
@@ -545,10 +603,10 @@ function App() {
 
       <div className={`menu-overlay ${menuOpen ? 'is-open' : ''}`} id="fullscreen-menu" aria-hidden={!menuOpen} ref={menuRef}>
         <nav className="menu-navigation" aria-label="Menú principal">
-          <a href="/#work" onClick={internalLink('/#work')} tabIndex={menuOpen ? 0 : -1}><span>01</span> Proyectos</a>
-          <a href="/#services" onClick={internalLink('/#services')} tabIndex={menuOpen ? 0 : -1}><span>02</span> ¿Qué necesitás?</a>
-          <a href="/#about" onClick={internalLink('/#about')} tabIndex={menuOpen ? 0 : -1}><span>03</span> Sobre mí</a>
-          <a href="/#contact" onClick={internalLink('/#contact')} tabIndex={menuOpen ? 0 : -1}><span>04</span> Contacto</a>
+          <a href="/#work" onClick={internalLink('/#work')} tabIndex={menuOpen ? 0 : -1}><span>01</span><strong>Proyectos</strong><i aria-hidden="true">↗</i></a>
+          <a href="/#services" onClick={internalLink('/#services')} tabIndex={menuOpen ? 0 : -1}><span>02</span><strong>¿Qué necesitás?</strong><i aria-hidden="true">↗</i></a>
+          <a href="/#about" onClick={internalLink('/#about')} tabIndex={menuOpen ? 0 : -1}><span>03</span><strong>Sobre mí</strong><i aria-hidden="true">↗</i></a>
+          <a href="/#contact" onClick={internalLink('/#contact')} tabIndex={menuOpen ? 0 : -1}><span>04</span><strong>Contacto</strong><i aria-hidden="true">↗</i></a>
         </nav>
         <div className="menu-overlay__footer"><span>Diseño gráfico · Fotografía · Contenido</span><a href={instagramUrl} target="_blank" rel="noreferrer" tabIndex={menuOpen ? 0 : -1}>@francodigital__ ↗</a></div>
       </div>
