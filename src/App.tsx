@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type MouseEvent } from 'react'
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, type MouseEvent } from 'react'
 import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import francoLogo from './assets/franco-digital-logo.png'
@@ -9,8 +9,22 @@ import './App.css'
 
 gsap.registerPlugin(ScrollTrigger)
 
+const GalleryStudio = lazy(() => import('./galleries/GalleryStudio'))
+
 const instagramUrl = 'https://www.instagram.com/francodigital__/'
 const whatsappUrl = 'https://wa.me/5493624080801'
+
+function ReiconArrowUpRight({ className = '' }: { className?: string }) {
+  return <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M19 4.25C19.4142 4.25 19.75 4.58579 19.75 5V13C19.75 13.4142 19.4142 13.75 19 13.75C18.5858 13.75 18.25 13.4142 18.25 13V6.81066L5.53033 19.5303C5.23744 19.8232 4.76256 19.8232 4.46967 19.5303C4.17678 19.2374 4.17678 18.7626 4.46967 18.4697L17.1893 5.75H11C10.5858 5.75 10.25 5.41421 10.25 5C10.25 4.58579 10.5858 4.25 11 4.25H19Z" fill="currentColor" /></svg>
+}
+
+function ReiconInstagram({ className = '' }: { className?: string }) {
+  return <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 22H15C20 22 22 20 22 15V9C22 4 20 2 15 2H9C4 2 2 4 2 9V15C2 20 4 22 9 22Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /><path d="M12 15.5C13.933 15.5 15.5 13.933 15.5 12C15.5 10.067 13.933 8.5 12 8.5C10.067 8.5 8.5 10.067 8.5 12C8.5 13.933 10.067 15.5 12 15.5Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /><path d="M17.6361 7H17.6477" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+}
+
+function WhatsAppLogo({ className = '' }: { className?: string }) {
+  return <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.272-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z" /></svg>
+}
 
 const services = [
   {
@@ -40,16 +54,6 @@ const processSteps = [
 const normalizePath = (path: string) => path.replace(/\/+$/, '') || '/'
 
 type Navigate = (target: string) => void
-
-function InstagramIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <rect x="3" y="3" width="18" height="18" rx="5" />
-      <circle cx="12" cy="12" r="4.2" />
-      <circle className="instagram-dot" cx="17.4" cy="6.7" r="1" />
-    </svg>
-  )
-}
 
 function Intro({ onComplete }: { onComplete: () => void }) {
   const introRef = useRef<HTMLDivElement>(null)
@@ -180,29 +184,22 @@ function HomePage({ navigate }: { navigate: Navigate }) {
   return (
     <div className="route-view home-view">
       <section className="hero" id="home" aria-labelledby="hero-title">
-        <div className="hero-meta eyebrow">
-          <span>Diseñador gráfico / Fotógrafo profesional</span>
-          <span className="country-flag" role="img" aria-label="Argentina">
-            <svg viewBox="0 0 30 20" aria-hidden="true">
-              <path fill="#74acdf" d="M0 0h30v20H0z" />
-              <path fill="#fff" d="M0 6.67h30v6.66H0z" />
-              <circle cx="15" cy="10" r="2" fill="#f6b40e" />
-            </svg>
-          </span>
-        </div>
-
         <div className="hero-layout">
           <div className="hero-copy">
-            <p className="hero-kicker">Branding · CM · Fotografía profesional</p>
             <h1 id="hero-title">Diseño que <em>se mueve.</em><br />Imágenes que quedan.</h1>
             <p className="hero-intro">Identidad visual, contenido y fotografía para marcas, clubes y proyectos que quieren comunicar con una imagen propia.</p>
             <div className="hero-actions">
               <a className="text-link" href="/#work" onClick={follow('/#work')}>
                 <span>Explorar proyectos</span><span className="link-arrow" aria-hidden="true">↘</span>
               </a>
-              <a className="instagram-button" href={instagramUrl} target="_blank" rel="noreferrer" aria-label="Ver Instagram de Franco Digital">
-                <InstagramIcon /><span>Instagram</span><i aria-hidden="true">↗</i>
-              </a>
+              <div className="hero-socials">
+                <a className="instagram-button" href={instagramUrl} target="_blank" rel="noreferrer" aria-label="Ver Instagram de Franco Digital">
+                  <ReiconInstagram className="instagram-button__icon" /><span>Instagram</span><ReiconArrowUpRight className="instagram-button__arrow" />
+                </a>
+                <a className="whatsapp-button" href={whatsappUrl} target="_blank" rel="noreferrer" aria-label="Hablar con Franco Digital por WhatsApp">
+                  <WhatsAppLogo className="whatsapp-button__icon" /><span>WhatsApp</span><ReiconArrowUpRight className="whatsapp-button__arrow" />
+                </a>
+              </div>
             </div>
           </div>
 
@@ -216,7 +213,7 @@ function HomePage({ navigate }: { navigate: Navigate }) {
               }))}
               preset="liquid"
               intro="rise"
-              cardHeight={0.56}
+              cardHeight={0.46}
               gap={14}
               squeeze={0.2}
               focusOnClick
@@ -337,7 +334,6 @@ function HomePage({ navigate }: { navigate: Navigate }) {
 
 function ProjectDetail({ project, navigate }: { project: Project; navigate: Navigate }) {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
-  const nextProject = projects[(projects.findIndex((item) => item.slug === project.slug) + 1) % projects.length]
 
   useEffect(() => {
     if (lightboxIndex === null) return
@@ -364,43 +360,21 @@ function ProjectDetail({ project, navigate }: { project: Project; navigate: Navi
     <div className="route-view project-view">
       <article>
         <header className="project-hero">
-          <a className="back-link" href="/#work" onClick={follow('/#work')}><span aria-hidden="true">←</span> Todos los proyectos</a>
-          <div className="project-hero__meta"><span>Proyecto {project.number}</span><span>{project.year}</span><span>{project.location}</span></div>
-          <p className="eyebrow">{project.category}</p>
+          <a className="back-link" href="/#work" onClick={follow('/#work')}><span aria-hidden="true">←</span> Volver a proyectos</a>
           <h1>{project.title}</h1>
-          <p className="project-hero__summary">{project.summary}</p>
-          <div className="project-cover">
-            <img src={project.images[0]} alt={`${project.title}, portada`} />
-            <span>01 / {String(project.images.length).padStart(2, '0')}</span>
-          </div>
         </header>
 
-        <section className="project-story section-frame" data-reveal>
-          <p className="eyebrow">El proyecto</p>
-          <div><p>{project.description}</p><ul>{project.services.map((service) => <li key={service}>{service}</li>)}</ul></div>
-        </section>
-
-        <section className="project-gallery section-frame" aria-labelledby="gallery-title">
-          <div className="gallery-heading" data-reveal><p className="eyebrow">Serie completa</p><h2 id="gallery-title">Cada imagen,<br /><em>parte del relato.</em></h2><span>{String(project.images.length).padStart(2, '0')} fotografías</span></div>
+        <section className="project-gallery" aria-label={`Fotos de ${project.title}`}>
           <div className="gallery-grid">
             {project.images.map((image, index) => (
               <button className={`gallery-item gallery-item--${index + 1}`} type="button" onClick={() => setLightboxIndex(index)} aria-label={`Ampliar imagen ${index + 1} de ${project.title}`} data-reveal key={image}>
                 <img src={image} alt={`${project.title}, fotografía ${index + 1}`} loading={index < 2 ? 'eager' : 'lazy'} />
-                <span>{String(index + 1).padStart(2, '0')}</span>
-                <i aria-hidden="true">↗</i>
               </button>
             ))}
           </div>
         </section>
-
-        <section className="next-project" data-reveal>
-          <p className="eyebrow">Siguiente proyecto</p>
-          <a href={`/proyectos/${nextProject.slug}`} onClick={follow(`/proyectos/${nextProject.slug}`)}>
-            <span>{nextProject.number}</span><strong>{nextProject.title}</strong><i aria-hidden="true">→</i>
-          </a>
-        </section>
+        <p className="project-hero__summary">{project.summary}</p>
       </article>
-      <ContactSection compact />
 
       {lightboxIndex !== null && (
         <div className="lightbox" role="dialog" aria-modal="true" aria-label={`Galería de ${project.title}`} onMouseDown={(event) => { if (event.target === event.currentTarget) setLightboxIndex(null) }}>
@@ -421,11 +395,11 @@ function ContactSection({ compact = false }: { compact?: boolean }) {
       <div className="contact-inner" data-reveal>
         <p className="eyebrow">¿Hacemos algo?</p>
         <h2 id={compact ? 'detail-contact-title' : 'contact-title'}>Tu próxima idea<br /><em>empieza acá.</em></h2>
-        <a className="contact-link" href={whatsappUrl} target="_blank" rel="noreferrer">+54 9 362 408-0801 <span aria-hidden="true">↗</span></a>
+        <a className="contact-link" href={whatsappUrl} target="_blank" rel="noreferrer"><WhatsAppLogo className="contact-link__whatsapp" />+54 9 362 408-0801 <ReiconArrowUpRight className="contact-link__arrow" /></a>
       </div>
       <div className="contact-footer">
         <span>© 2026 Franco Digital</span>
-        <div className="social-links"><a href={instagramUrl} target="_blank" rel="noreferrer">Instagram</a><a href={whatsappUrl} target="_blank" rel="noreferrer">WhatsApp</a></div>
+        <div className="social-links"><a href={instagramUrl} target="_blank" rel="noreferrer"><ReiconInstagram className="social-links__icon social-links__icon--instagram" />Instagram</a><a href={whatsappUrl} target="_blank" rel="noreferrer"><WhatsAppLogo className="social-links__icon social-links__icon--whatsapp" />WhatsApp</a></div>
         <a href="#top">Volver arriba ↑</a>
       </div>
     </section>
@@ -473,8 +447,15 @@ function App() {
     : undefined
 
   useEffect(() => {
-    document.title = activeProject ? `${activeProject.title} — Franco Digital` : 'Franco Digital — Diseño y fotografía'
-  }, [activeProject])
+    const shareGallery = pathname.startsWith('/galeria/')
+    document.title = pathname === '/admin'
+      ? 'Panel de fotografía — Franco Digital'
+      : shareGallery
+        ? 'Galería privada — Franco Digital'
+        : pathname === '/galerias'
+          ? 'Galerías en vivo — Franco Digital'
+          : activeProject ? `${activeProject.title} — Franco Digital` : 'Franco Digital — Diseño y fotografía'
+  }, [activeProject, pathname])
 
   useLayoutEffect(() => {
     if (!rootRef.current || !introComplete) return
@@ -487,18 +468,16 @@ function App() {
       )
       gsap.from('.site-header', { y: -24, duration: 0.58, ease: 'power3.out', immediateRender: false })
       if (window.matchMedia('(min-width: 761px)').matches) {
-        gsap.from('.desktop-navigation a, .desktop-cta', { y: -10, autoAlpha: 0, stagger: 0.055, duration: 0.42, delay: 0.08, ease: 'power3.out' })
+        gsap.from('.desktop-navigation a', { y: -10, autoAlpha: 0, stagger: 0.055, duration: 0.42, delay: 0.08, ease: 'power3.out', clearProps: 'transform,opacity' })
       }
 
       if (pathname === '/') {
         gsap.from('.hero-meta > *', { y: 14, autoAlpha: 0, stagger: 0.055, duration: 0.42, delay: 0.08, ease: 'power3.out' })
-        gsap.from('.hero-kicker', { y: 18, autoAlpha: 0, duration: 0.42, delay: 0.14, ease: 'power3.out' })
         gsap.from('.hero h1', { y: 52, autoAlpha: 0, duration: 0.64, delay: 0.16, ease: 'power3.out' })
         gsap.from('.hero-intro, .hero-actions', { y: 22, autoAlpha: 0, stagger: 0.08, duration: 0.5, delay: 0.28, ease: 'power3.out' })
         gsap.to('.hero-copy', { yPercent: -7, ease: 'none', scrollTrigger: { trigger: '.hero', start: 'top top', end: 'bottom top', scrub: 1 } })
       } else {
-        gsap.from('.project-hero > :not(.project-cover)', { y: 42, autoAlpha: 0, stagger: 0.08, duration: 0.72, ease: 'power3.out' })
-        gsap.from('.project-cover', { y: 80, scale: 0.97, autoAlpha: 0, duration: 1, delay: 0.18, ease: 'power3.out' })
+        gsap.from('.project-hero > *', { y: 28, autoAlpha: 0, stagger: 0.06, duration: 0.52, ease: 'power3.out' })
       }
 
       gsap.utils.toArray<HTMLElement>('[data-reveal]').forEach((element) => {
@@ -580,8 +559,16 @@ function App() {
     navigate(target)
   }
 
+  const adminRoute = pathname === '/admin'
+  const sharedGalleryToken = pathname.startsWith('/galeria/') ? pathname.split('/').filter(Boolean).at(-1) ?? '' : ''
+
   return (
-    <main className="site-shell" ref={rootRef}>
+    <main className={`site-shell ${adminRoute ? 'site-shell--photo-app' : ''}`} ref={rootRef}>
+      {adminRoute ? (
+        <Suspense fallback={<div className="route-view"><p className="eyebrow">ARCHIVO PRIVADO</p><p>Abriendo la galería…</p></div>}>
+          <GalleryStudio mode="admin" />
+        </Suspense>
+      ) : <>
       {!introComplete && <Intro onComplete={() => setIntroComplete(true)} />}
       <header className="site-header" id="top">
         <a className="brand-lockup" href="/" onClick={internalLink('/')} aria-label="Franco Digital, inicio">
@@ -589,9 +576,10 @@ function App() {
           <span className="wordmark"><strong>FRANCO DIGITAL</strong><small>Diseñador gráfico <i>/</i> fotógrafo profesional</small></span>
         </a>
         <nav className="desktop-navigation" aria-label="Navegación principal">
-          <a href="/#work" onClick={internalLink('/#work')}><span>01</span>Proyectos</a>
+          <a className={pathname === '/' || activeProject ? 'is-active' : ''} href="/#work" onClick={internalLink('/#work')}><span>01</span>Proyectos</a>
           <a href="/#services" onClick={internalLink('/#services')}><span>02</span>Servicios</a>
           <a href="/#about" onClick={internalLink('/#about')}><span>03</span>Sobre mí</a>
+          <a className={pathname === '/galerias' ? 'is-active' : ''} href="/galerias" onClick={internalLink('/galerias')}><span>04</span>Galerías</a>
         </nav>
         <a className="desktop-cta" href={whatsappUrl} target="_blank" rel="noreferrer">
           <span>Hablemos</span><i aria-hidden="true">↗</i>
@@ -603,17 +591,29 @@ function App() {
 
       <div className={`menu-overlay ${menuOpen ? 'is-open' : ''}`} id="fullscreen-menu" aria-hidden={!menuOpen} ref={menuRef}>
         <nav className="menu-navigation" aria-label="Menú principal">
-          <a href="/#work" onClick={internalLink('/#work')} tabIndex={menuOpen ? 0 : -1}><span>01</span><strong>Proyectos</strong><i aria-hidden="true">↗</i></a>
-          <a href="/#services" onClick={internalLink('/#services')} tabIndex={menuOpen ? 0 : -1}><span>02</span><strong>¿Qué necesitás?</strong><i aria-hidden="true">↗</i></a>
-          <a href="/#about" onClick={internalLink('/#about')} tabIndex={menuOpen ? 0 : -1}><span>03</span><strong>Sobre mí</strong><i aria-hidden="true">↗</i></a>
-          <a href="/#contact" onClick={internalLink('/#contact')} tabIndex={menuOpen ? 0 : -1}><span>04</span><strong>Contacto</strong><i aria-hidden="true">↗</i></a>
+          <a href="/#work" onClick={internalLink('/#work')} tabIndex={menuOpen ? 0 : -1}><strong>Proyectos</strong><ReiconArrowUpRight className="menu-navigation__arrow" /></a>
+          <a href="/#services" onClick={internalLink('/#services')} tabIndex={menuOpen ? 0 : -1}><strong>¿Qué necesitás?</strong><ReiconArrowUpRight className="menu-navigation__arrow" /></a>
+          <a href="/#about" onClick={internalLink('/#about')} tabIndex={menuOpen ? 0 : -1}><strong>Sobre mí</strong><ReiconArrowUpRight className="menu-navigation__arrow" /></a>
+          <a href="/galerias" onClick={internalLink('/galerias')} tabIndex={menuOpen ? 0 : -1}><strong>Galerías</strong><ReiconArrowUpRight className="menu-navigation__arrow" /></a>
+          <a href="/#contact" onClick={internalLink('/#contact')} tabIndex={menuOpen ? 0 : -1}><strong>Contacto</strong><ReiconArrowUpRight className="menu-navigation__arrow" /></a>
         </nav>
-        <div className="menu-overlay__footer"><span>Diseño gráfico · Fotografía · Contenido</span><a href={instagramUrl} target="_blank" rel="noreferrer" tabIndex={menuOpen ? 0 : -1}>@francodigital__ ↗</a></div>
+        <div className="menu-overlay__footer">
+          <span>Diseño gráfico · Fotografía · Contenido</span>
+          <div className="menu-overlay__socials">
+            <a className="menu-overlay__social-link" href={instagramUrl} target="_blank" rel="noreferrer" tabIndex={menuOpen ? 0 : -1}><ReiconInstagram className="menu-overlay__social-icon" /><span>@francodigital__</span></a>
+            <a className="menu-overlay__social-link menu-overlay__social-link--whatsapp" href={whatsappUrl} target="_blank" rel="noreferrer" tabIndex={menuOpen ? 0 : -1}><WhatsAppLogo className="menu-overlay__social-icon" /><span><strong>Franco Digital</strong><small>Hablá conmigo</small></span></a>
+          </div>
+        </div>
       </div>
 
-      {pathname === '/' ? <HomePage navigate={navigate} /> : activeProject ? <ProjectDetail project={activeProject} navigate={navigate} /> : (
+      {pathname === '/' ? <HomePage navigate={navigate} /> : activeProject ? <ProjectDetail project={activeProject} navigate={navigate} /> : pathname.startsWith('/galeria/') ? (
+        <Suspense fallback={<div className="route-view"><p className="eyebrow">ARCHIVO PRIVADO</p><p>Abriendo la galería…</p></div>}><GalleryStudio mode="gallery" token={sharedGalleryToken} /></Suspense>
+      ) : pathname === '/galerias' ? (
+        <Suspense fallback={<div className="route-view"><p className="eyebrow">ARCHIVO PÚBLICO</p><p>Cargando galerías…</p></div>}><GalleryStudio mode="directory" /></Suspense>
+      ) : (
         <section className="route-view not-found"><p className="eyebrow">Error 404</p><h1>Esta página<br /><em>no existe.</em></h1><a className="text-link" href="/" onClick={internalLink('/')}><span>Volver al inicio</span><span>→</span></a></section>
       )}
+      </>}
     </main>
   )
 }

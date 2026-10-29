@@ -30,14 +30,17 @@
 
 .flex-carousel__caption {
   position: absolute;
+  z-index: 2;
   left: 0;
   right: 0;
-  top: calc(50% + var(--flex-carousel-half) * var(--flex-carousel-lift, 1) + 22px);
+  top: auto;
+  bottom: 2.7rem;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 6px;
-  padding: 0 16px;
+  padding: 2.1rem 16px 0;
+  background: linear-gradient(180deg, transparent 0%, rgba(8, 9, 11, .92) 38%, #08090b 78%);
   pointer-events: none;
   text-align: center;
   animation: flex-carousel-reveal 900ms ease both;
