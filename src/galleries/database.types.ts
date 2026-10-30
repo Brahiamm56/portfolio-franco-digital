@@ -51,6 +51,7 @@ export type Database = {
         Row: {
           client_name: string
           client_selected_photo_ids: string[]
+          cover_photo_id: string | null
           created_at: string
           event_date: string | null
           id: string
@@ -62,6 +63,7 @@ export type Database = {
         Insert: {
           client_name: string
           client_selected_photo_ids?: string[]
+          cover_photo_id?: string | null
           created_at?: string
           event_date?: string | null
           id?: string
@@ -73,6 +75,7 @@ export type Database = {
         Update: {
           client_name?: string
           client_selected_photo_ids?: string[]
+          cover_photo_id?: string | null
           created_at?: string
           event_date?: string | null
           id?: string

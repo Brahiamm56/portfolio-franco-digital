@@ -12,7 +12,9 @@ import {
   listGalleries,
   refreshGalleryPhotosForExport,
   saveGalleryPhotoSelections,
+  setGalleryCoverPhoto,
   setGalleryStatus,
+  uploadGalleryCoverPhoto,
   usingDemoGalleryStore,
   type PhotoGallery,
   type GalleryPhoto,
@@ -36,6 +38,15 @@ function WhatsAppLogo({ className = '' }: { className?: string }) {
 
 function PhotoMark() {
   return <span className="photo-mark" aria-hidden="true"><i /><i /><i /><i /></span>
+}
+
+function PhotoWatermark() {
+  return (
+    <div className="gallery-photo-watermark" aria-hidden="true">
+      <span className="gallery-photo-watermark__lines" />
+      <span className="gallery-photo-watermark__badge">FRANCO DIGITAL</span>
+    </div>
+  )
 }
 
 function GalleryBrand({ light = false }: { light?: boolean }) {
@@ -132,16 +143,25 @@ async function buildGalleryPdf(gallery: PhotoGallery, photos: GalleryPhoto[]) {
   document.save(`${filename}-seleccion.pdf`)
 }
 
-function GalleryPhotoManager({ gallery }: { gallery: PhotoGallery }) {
+function GalleryPhotoManager({
+  gallery,
+  onSetCover,
+}: {
+  gallery: PhotoGallery
+  onSetCover: (photoId: string) => void
+}) {
   const defaultSelected = gallery.clientSelectedPhotoIds.filter((id) => gallery.photos.some((photo) => photo.id === id))
   const clientSelectionKey = defaultSelected.join('|')
   const [selected, setSelected] = useState<string[]>(defaultSelected)
+  const [prevSelectionKey, setPrevSelectionKey] = useState(clientSelectionKey)
+  if (prevSelectionKey !== clientSelectionKey) {
+    setPrevSelectionKey(clientSelectionKey)
+    setSelected(clientSelectionKey ? clientSelectionKey.split('|') : [])
+  }
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const photosForDelivery = gallery.photos.filter((photo) => selected.includes(photo.id))
   const clientSelectionCount = defaultSelected.length
-
-  useEffect(() => setSelected(clientSelectionKey ? clientSelectionKey.split('|') : []), [clientSelectionKey])
 
   const toggle = (photoId: string) => setSelected((current) => current.includes(photoId)
     ? current.filter((id) => id !== photoId)
@@ -168,17 +188,38 @@ function GalleryPhotoManager({ gallery }: { gallery: PhotoGallery }) {
       <summary>Elegir fotos y preparar entrega <span>{selected.length} elegidas</span></summary>
       <div className="gallery-photo-manager__content">
         <div className="gallery-photo-manager__heading">
-          <p>{clientSelectionCount ? `El cliente eligió ${clientSelectionCount} ${clientSelectionCount === 1 ? 'foto' : 'fotos'}.` : 'El cliente todavía no eligió fotos.'} Marcá las que querés incluir en el documento.</p>
+          <p>{clientSelectionCount ? `El cliente eligió ${clientSelectionCount} ${clientSelectionCount === 1 ? 'foto' : 'fotos'}.` : 'El cliente todavía no eligió fotos.'} Marcá las que querés incluir en el documento o definí cuál es la portada del evento.</p>
         </div>
         <div className="gallery-photo-manager__grid">
           {gallery.photos.map((photo, index) => {
             const isSelected = selected.includes(photo.id)
             const chosenByClient = defaultSelected.includes(photo.id)
-            return <button type="button" key={photo.id} className={`gallery-photo-manager__item ${isSelected ? 'is-selected' : ''}`} onClick={() => toggle(photo.id)} aria-pressed={isSelected}>
-              <img src={photo.url} alt="" loading="lazy" />
-              <span className="gallery-photo-manager__check">{isSelected ? '✓' : '+'}</span>
-              <span className="gallery-photo-manager__caption">{String(index + 1).padStart(2, '0')} · {photo.filename}{chosenByClient && <small>Elegida por cliente</small>}</span>
-            </button>
+            const isCover = gallery.coverPhotoId === photo.id || (!gallery.coverPhotoId && index === 0)
+            return (
+              <div key={photo.id} className="gallery-photo-manager__cell">
+                <button
+                  type="button"
+                  className={`gallery-photo-manager__item ${isSelected ? 'is-selected' : ''}`}
+                  onClick={() => toggle(photo.id)}
+                  aria-pressed={isSelected}
+                >
+                  <img src={photo.url} alt="" loading="lazy" />
+                  <span className="gallery-photo-manager__check">{isSelected ? '✓' : '+'}</span>
+                  <span className="gallery-photo-manager__caption">
+                    {String(index + 1).padStart(2, '0')} · {photo.filename.replace(/^\[PORTADA\]\s*/i, '')}
+                    {chosenByClient && <small>Elegida por cliente</small>}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className={`gallery-photo-manager__cover-btn ${isCover ? 'is-active' : ''}`}
+                  title={isCover ? 'Foto de portada actual' : 'Fijar esta foto como portada del evento'}
+                  onClick={() => onSetCover(photo.id)}
+                >
+                  {isCover ? '★ Portada' : '☆ Hacer portada'}
+                </button>
+              </div>
+            )
           })}
         </div>
         {error && <p className="gallery-photo-manager__error" role="alert">{error}</p>}
@@ -246,11 +287,17 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
   const [clientName, setClientName] = useState('')
   const [eventDate, setEventDate] = useState('')
   const [price, setPrice] = useState('5000')
+  const [coverFile, setCoverFile] = useState<File | null>(null)
   const [files, setFiles] = useState<File[]>([])
+  const coverPreviewUrl = useMemo(() => coverFile ? URL.createObjectURL(coverFile) : null, [coverFile])
   const filePreviews = useMemo(() => files.map((file) => ({
     file,
     url: URL.createObjectURL(file),
   })), [files])
+
+  useEffect(() => () => {
+    if (coverPreviewUrl) URL.revokeObjectURL(coverPreviewUrl)
+  }, [coverPreviewUrl])
 
   useEffect(() => () => {
     filePreviews.forEach(({ url }) => URL.revokeObjectURL(url))
@@ -262,6 +309,7 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
     setClientName('')
     setEventDate('')
     setPrice('5000')
+    setCoverFile(null)
     setFiles([])
   }
 
@@ -287,22 +335,54 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
       return
     }
     if (files.length && !validateFiles(files)) return
+    if (coverFile && !validateFiles([coverFile])) return
     setBusy(true)
     setError('')
     setNotice('')
     try {
-      const id = await createGallery({ title: title.trim(), clientName: clientName.trim(), eventDate })
+      const id = await createGallery({ title: title.trim(), clientName: clientName.trim(), eventDate, coverFile })
       if (files.length) await addGalleryPhotos(id, files, priceArs)
       setTitle('')
       setClientName('')
       setEventDate('')
       closeCreate()
-      setNotice(files.length ? 'Galería creada con sus primeras fotos.' : 'Galería creada. Ya podés cargarle fotos.')
+      setNotice(files.length || coverFile ? 'Galería creada con sus fotos y portada.' : 'Galería creada. Ya podés cargarle fotos.')
       await refresh()
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : 'No pudimos crear la galería.'
       await refresh()
       setError(message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleUploadCover = async (gallery: PhotoGallery, file: File) => {
+    if (!validateFiles([file])) return
+    setBusy(true)
+    setError('')
+    setNotice('')
+    try {
+      await uploadGalleryCoverPhoto(gallery.id, file)
+      await refresh()
+      setNotice(`Foto de portada de “${gallery.title}” actualizada con éxito.`)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'No pudimos actualizar la portada.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleSetCoverPhoto = async (gallery: PhotoGallery, photoId: string) => {
+    setBusy(true)
+    setError('')
+    setNotice('')
+    try {
+      await setGalleryCoverPhoto(gallery.id, photoId)
+      await refresh()
+      setNotice(`Foto fijada como portada de “${gallery.title}”.`)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'No pudimos cambiar la portada.')
     } finally {
       setBusy(false)
     }
@@ -392,26 +472,48 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
             <div className="gallery-empty"><PhotoMark /><h3>El archivo empieza acá.</h3><p>Creá tu primera galería para organizar las fotos de un cliente.</p><button className="gallery-button gallery-button--outline" type="button" onClick={() => setShowCreate(true)}>Crear primera galería <span>＋</span></button></div>
           ) : (
             <div className="gallery-card-list">
-              {galleries.map((gallery, index) => (
-                <article className="gallery-card" key={gallery.id}>
-                  <div className="gallery-card__cover">
-                    {gallery.photos[0]?.url ? <img src={gallery.photos[0].url} alt="" /> : <div className="gallery-card__placeholder"><PhotoMark /><span>SIN FOTOS</span></div>}
-                    <span className={`gallery-status ${gallery.status === 'published' ? 'is-published' : ''}`}><i />{gallery.status === 'published' ? 'PUBLICADA' : 'BORRADOR'}</span>
-                    <span className="gallery-card__number">{String(galleries.length - index).padStart(2, '0')}</span>
-                  </div>
-                  <div className="gallery-card__body">
-                    <div className="gallery-card__info"><p>{gallery.clientName}{gallery.eventDate ? ` · ${new Date(`${gallery.eventDate}T12:00:00`).toLocaleDateString('es-AR')}` : ''}</p><h3>{gallery.title}</h3><span>{gallery.photos.length} {gallery.photos.length === 1 ? 'foto' : 'fotos'} · {gallery.photos[0] ? currency.format(gallery.photos[0].priceArs) : 'Precio sin definir'} c/u</span></div>
-                    <div className="gallery-card__actions">
-                      {gallery.status === 'published' && <button type="button" className="gallery-button gallery-button--small gallery-button--outline" onClick={() => void copyLink(gallery)}>Copiar link <span>↗</span></button>}
-                      <button type="button" className={`gallery-button gallery-button--small ${gallery.status === 'published' ? 'gallery-button--quiet' : 'gallery-button--primary'}`} disabled={busy} onClick={() => void toggleStatus(gallery)}>{gallery.status === 'published' ? 'Pausar link' : 'Publicar'}</button>
-                      <label className="gallery-upload-more">＋<span>Agregar fotos</span><input type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(event) => { if (event.target.files) void uploadMore(gallery, Array.from(event.target.files)); event.target.value = '' }} /></label>
-                      <button type="button" className="gallery-button gallery-button--small gallery-button--danger" disabled={busy} onClick={() => void removeGallery(gallery)}>Eliminar galería</button>
+              {galleries.map((gallery, index) => {
+                const coverUrl = gallery.coverPhotoUrl || gallery.photos[0]?.url
+                return (
+                  <article className="gallery-card" key={gallery.id}>
+                    <div className="gallery-card__cover">
+                      {coverUrl ? <img src={coverUrl} alt={`Portada de ${gallery.title}`} /> : <div className="gallery-card__placeholder"><PhotoMark /><span>SIN FOTOS</span></div>}
+                      <span className={`gallery-status ${gallery.status === 'published' ? 'is-published' : ''}`}><i />{gallery.status === 'published' ? 'PUBLICADA' : 'BORRADOR'}</span>
+                      <span className="gallery-card__number">{String(galleries.length - index).padStart(2, '0')}</span>
+                      <span className="gallery-card__cover-pill">PORTADA</span>
+                      <label className="gallery-card__cover-action" title="Cambiar foto de portada">
+                        <span>📷 Cambiar portada</span>
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp"
+                          disabled={busy}
+                          onChange={(event) => {
+                            const file = event.target.files?.[0]
+                            if (file) void handleUploadCover(gallery, file)
+                            event.target.value = ''
+                          }}
+                        />
+                      </label>
                     </div>
-                    {gallery.status === 'published' && <a className="gallery-card__share" href={galleryShareUrl(gallery.shareToken)} target="_blank" rel="noreferrer">Abrir link de cliente <span>↗</span></a>}
-                  </div>
-                  {gallery.photos.length > 0 && <GalleryPhotoManager gallery={gallery} />}
-                </article>
-              ))}
+                    <div className="gallery-card__body">
+                      <div className="gallery-card__info"><p>{gallery.clientName}{gallery.eventDate ? ` · ${new Date(`${gallery.eventDate}T12:00:00`).toLocaleDateString('es-AR')}` : ''}</p><h3>{gallery.title}</h3><span>{gallery.photos.length} {gallery.photos.length === 1 ? 'foto' : 'fotos'} · {gallery.photos[0] ? currency.format(gallery.photos[0].priceArs) : 'Precio sin definir'} c/u</span></div>
+                      <div className="gallery-card__actions">
+                        {gallery.status === 'published' && <button type="button" className="gallery-button gallery-button--small gallery-button--outline" onClick={() => void copyLink(gallery)}>Copiar link <span>↗</span></button>}
+                        <button type="button" className={`gallery-button gallery-button--small ${gallery.status === 'published' ? 'gallery-button--quiet' : 'gallery-button--primary'}`} disabled={busy} onClick={() => void toggleStatus(gallery)}>{gallery.status === 'published' ? 'Pausar link' : 'Publicar'}</button>
+                        <label className="gallery-upload-more">＋<span>Agregar fotos</span><input type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(event) => { if (event.target.files) void uploadMore(gallery, Array.from(event.target.files)); event.target.value = '' }} /></label>
+                        <button type="button" className="gallery-button gallery-button--small gallery-button--danger" disabled={busy} onClick={() => void removeGallery(gallery)}>Eliminar galería</button>
+                      </div>
+                      {gallery.status === 'published' && <a className="gallery-card__share" href={galleryShareUrl(gallery.shareToken)} target="_blank" rel="noreferrer">Abrir link de cliente <span>↗</span></a>}
+                    </div>
+                    {gallery.photos.length > 0 && (
+                      <GalleryPhotoManager
+                        gallery={gallery}
+                        onSetCover={(photoId) => void handleSetCoverPhoto(gallery, photoId)}
+                      />
+                    )}
+                  </article>
+                )
+              })}
             </div>
           )}
           <footer className="gallery-footer"><span>© 2026 FRANCO DIGITAL</span><span>ARCHIVO FOTOGRÁFICO / 01</span></footer>
@@ -422,13 +524,111 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
         <label>Nombre de la galería<input autoFocus value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Ej. Final del torneo apertura" required maxLength={120} /></label>
         <div className="gallery-form-row"><label>Cliente / equipo<input value={clientName} onChange={(event) => setClientName(event.target.value)} placeholder="Ej. Club Hércules" required maxLength={120} /></label><label>Fecha del evento<input type="date" value={eventDate} onChange={(event) => setEventDate(event.target.value)} /></label></div>
         <label>Precio por foto <div className="gallery-price-field"><span>$</span><input type="number" min="0" max="2147483647" step="1" inputMode="numeric" value={price} onChange={(event) => setPrice(event.target.value)} /><small>ARS</small></div></label>
+        
+        <div className="gallery-cover-field">
+          <span className="gallery-field-label">Foto de portada (opcional)</span>
+          <label className="gallery-cover-dropzone">
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={(event) => {
+                const file = event.target.files?.[0]
+                if (file && validateFiles([file])) setCoverFile(file)
+                event.target.value = ''
+              }}
+            />
+            {coverPreviewUrl ? (
+              <div className="gallery-cover-dropzone__preview">
+                <img src={coverPreviewUrl} alt="Vista previa de portada" />
+                <div className="gallery-cover-dropzone__info">
+                  <span>{coverFile?.name}</span>
+                  <button type="button" onClick={(e) => { e.preventDefault(); setCoverFile(null) }}>Quitar portada ×</button>
+                </div>
+              </div>
+            ) : (
+              <div className="gallery-cover-dropzone__prompt">
+                <span className="gallery-cover-dropzone__icon">📷</span>
+                <strong>Elegí una foto de portada para este evento</strong>
+                <small>Se mostrará como cabecera en el link del evento y en el panel</small>
+              </div>
+            )}
+          </label>
+        </div>
+
         <label className="gallery-dropzone"><input type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(event) => { setFiles(Array.from(event.target.files ?? [])); event.target.value = '' }} /><span className="gallery-dropzone__icon">↑</span><strong>{files.length ? `${files.length} ${files.length === 1 ? 'foto seleccionada' : 'fotos seleccionadas'}` : 'Elegí las fotos para esta galería'}</strong><small>JPG, PNG o WebP · hasta 6 MB por foto</small><span className="gallery-dropzone__button">Seleccionar archivos</span></label>
         {filePreviews.length > 0 && <div className="gallery-upload-previews" aria-label="Vista previa de las fotos seleccionadas">{filePreviews.map(({ file, url }, index) => <figure className="gallery-upload-preview" key={`${file.name}-${file.lastModified}-${index}`}><img src={url} alt={`Vista previa: ${file.name}`} /><figcaption title={file.name}>{file.name}</figcaption><button type="button" aria-label={`Quitar ${file.name}`} onClick={() => setFiles((current) => current.filter((_, fileIndex) => fileIndex !== index))}>×</button></figure>)}</div>}
-        <div className="gallery-modal__actions"><button type="button" className="gallery-button gallery-button--quiet" onClick={() => setShowCreate(false)}>Cancelar</button><button type="submit" className="gallery-button gallery-button--primary" disabled={busy}>{busy ? 'Guardando…' : 'Crear galería'} <span>↗</span></button></div>
+        <div className="gallery-modal__actions"><button type="button" className="gallery-button gallery-button--quiet" onClick={() => closeCreate()}>Cancelar</button><button type="submit" className="gallery-button gallery-button--primary" disabled={busy}>{busy ? 'Guardando…' : 'Crear galería'} <span>↗</span></button></div>
       </form></section></div>}
     </div>
   )
 }
+
+function PublicPhotoItem({
+  photo,
+  index,
+  galleryTitle,
+  isSelected,
+  onOpenPreview,
+  onToggle,
+}: {
+  photo: PublicPhotoGallery['photos'][number]
+  index: number
+  galleryTitle: string
+  isSelected: boolean
+  onOpenPreview: () => void
+  onToggle: () => void
+}) {
+  const [loaded, setLoaded] = useState(false)
+  const [hasError, setHasError] = useState(false)
+
+  return (
+    <article className={`gallery-client__photo ${isSelected ? 'is-selected' : ''} ${loaded ? 'is-loaded' : 'is-loading'}`}>
+      <button
+        type="button"
+        className="gallery-client__image-button"
+        onClick={onOpenPreview}
+        aria-label={`Ver foto ${index + 1} en grande`}
+      >
+        {!loaded && !hasError && (
+          <div className="gallery-client__photo-skeleton" aria-hidden="true">
+            <span className="gallery-client__photo-shimmer" />
+            <span className="gallery-client__photo-skeleton-num">{String(index + 1).padStart(2, '0')}</span>
+          </div>
+        )}
+        <img
+          src={photo.url}
+          alt={`${galleryTitle}, foto ${index + 1}`}
+          loading={index < 4 ? 'eager' : 'lazy'}
+          fetchPriority={index < 2 ? 'high' : 'auto'}
+          decoding="async"
+          draggable={false}
+          onContextMenu={(e) => e.preventDefault()}
+          onLoad={() => setLoaded(true)}
+          onError={() => setHasError(true)}
+          className={`gallery-client__photo-img ${loaded ? 'is-visible' : 'is-hidden'}`}
+        />
+        <PhotoWatermark />
+      </button>
+      <button
+        type="button"
+        className="gallery-client__check"
+        onClick={(e) => {
+          e.stopPropagation()
+          onToggle()
+        }}
+        aria-pressed={isSelected}
+        aria-label={`${isSelected ? 'Quitar' : 'Seleccionar'} foto ${index + 1}`}
+      >
+        {isSelected ? '✓' : '+'}
+      </button>
+      <span className="gallery-client__photo-price">
+        {photo.priceArs ? currency.format(photo.priceArs) : 'Sin cargo'}
+      </span>
+    </article>
+  )
+}
+
+const BATCH_SIZE = 12
 
 function PublicGallery({ token }: { token: string }) {
   const [gallery, setGallery] = useState<PublicPhotoGallery | null>(null)
@@ -437,6 +637,8 @@ function PublicGallery({ token }: { token: string }) {
   const [loading, setLoading] = useState(true)
   const [unavailable, setUnavailable] = useState(false)
   const [selectionError, setSelectionError] = useState('')
+  const [visibleCount, setVisibleCount] = useState(BATCH_SIZE)
+  const sentinelRef = useRef<HTMLDivElement | null>(null)
   const selectionQueue = useRef(Promise.resolve())
 
   useEffect(() => {
@@ -447,6 +649,7 @@ function PublicGallery({ token }: { token: string }) {
           setGallery(result)
           setSelected(result?.photos.filter((photo) => result.clientSelectedPhotoIds.includes(photo.id)).map((photo) => photo.id) ?? [])
           setUnavailable(!result)
+          setVisibleCount(BATCH_SIZE)
         }
       })
       .catch(() => { if (active) setUnavailable(true) })
@@ -454,21 +657,68 @@ function PublicGallery({ token }: { token: string }) {
     return () => { active = false }
   }, [token])
 
+  // Carga progresiva fluida de lotes con IntersectionObserver
+  useEffect(() => {
+    const sentinel = sentinelRef.current
+    if (!sentinel || !gallery) return
+    if (visibleCount >= gallery.photos.length) return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          setVisibleCount((prev) => Math.min(prev + BATCH_SIZE, gallery.photos.length))
+        }
+      },
+      { rootMargin: '600px 0px', threshold: 0.01 }
+    )
+
+    observer.observe(sentinel)
+    return () => observer.disconnect()
+  }, [gallery, visibleCount])
+
+  const openPreview = (index: number) => {
+    setVisibleCount((prev) => Math.max(prev, index + 1))
+    setPreviewIndex(index)
+  }
+
+  const navigatePreview = useCallback((step: number) => {
+    if (!gallery || !gallery.photos.length) return
+    setPreviewIndex((current) => {
+      if (current === null) return null
+      const next = (current + step + gallery.photos.length) % gallery.photos.length
+      setVisibleCount((prev) => Math.max(prev, next + 1))
+      return next
+    })
+  }, [gallery])
+
+  // Precarga silenciosa en lightbox de la foto anterior y siguiente para navegación instantánea
+  useEffect(() => {
+    if (previewIndex === null || !gallery) return
+    const len = gallery.photos.length
+    if (len <= 1) return
+    const nextIdx = (previewIndex + 1) % len
+    const prevIdx = (previewIndex - 1 + len) % len
+    const nextImg = new Image()
+    nextImg.src = gallery.photos[nextIdx].url
+    const prevImg = new Image()
+    prevImg.src = gallery.photos[prevIdx].url
+  }, [previewIndex, gallery])
+
   useEffect(() => {
     if (previewIndex === null || !gallery) return
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setPreviewIndex(null)
-      if (event.key === 'ArrowRight') setPreviewIndex((current) => current === null ? current : (current + 1) % gallery.photos.length)
-      if (event.key === 'ArrowLeft') setPreviewIndex((current) => current === null ? current : (current - 1 + gallery.photos.length) % gallery.photos.length)
+      if (event.key === 'ArrowRight') navigatePreview(1)
+      if (event.key === 'ArrowLeft') navigatePreview(-1)
     }
     window.addEventListener('keydown', onKeyDown)
     return () => {
       document.body.style.overflow = previousOverflow
       window.removeEventListener('keydown', onKeyDown)
     }
-  }, [gallery, previewIndex])
+  }, [gallery, previewIndex, navigatePreview])
 
   const selectedPhotos = useMemo(() => gallery?.photos.filter((photo) => selected.includes(photo.id)) ?? [], [gallery, selected])
   const total = selectedPhotos.reduce((sum, photo) => sum + photo.priceArs, 0)
@@ -496,15 +746,90 @@ function PublicGallery({ token }: { token: string }) {
         <>
           <main className="gallery-client__main">
             <a className="gallery-client__back" href="/galerias"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><g clipPath="url(#gallery-back-arrow-clip)"><path d="M13.5303 8.53033C13.8232 8.23744 13.8232 7.76256 13.5303 7.46967C13.2374 7.17678 12.7626 7.17678 12.4697 7.46967L8.46967 11.4697C8.32902 11.6103 8.25 11.8011 8.25 12C8.25 12.1989 8.32902 12.3897 8.46967 12.5303L12.4697 16.5303C12.7626 16.8232 13.2374 16.8232 13.5303 16.5303C13.8232 16.2374 13.8232 15.7626 13.5303 15.4697L10.0607 12L13.5303 8.53033Z" fill="currentColor" /><path fillRule="evenodd" clipRule="evenodd" d="M12 .25C5.51065 .25 .25 5.51065 .25 12S5.51065 23.75 12 23.75 23.75 18.4893 23.75 12 18.4893 .25 12 .25ZM1.75 12C1.75 6.33908 6.33908 1.75 12 1.75S22.25 6.33908 22.25 12 17.6609 22.25 12 22.25 1.75 17.6609 1.75 12Z" fill="currentColor" /></g><defs><clipPath id="gallery-back-arrow-clip"><rect width="24" height="24" fill="currentColor" /></clipPath></defs></svg>Volver a galerías</a>
+
+            {/* Portada y encabezado del evento */}
+            <header className="gallery-client__hero">
+              <div className="gallery-client__hero-media">
+                {gallery.coverPhotoUrl ? (
+                  <img
+                    src={gallery.coverPhotoUrl}
+                    alt={`Portada de ${gallery.title}`}
+                    className="gallery-client__hero-image"
+                    draggable={false}
+                    fetchPriority="high"
+                    decoding="async"
+                    onContextMenu={(e) => e.preventDefault()}
+                  />
+                ) : (
+                  <div className="gallery-client__hero-fallback">
+                    <PhotoMark />
+                  </div>
+                )}
+                <div className="gallery-client__hero-gradient" aria-hidden="true" />
+                <span className="gallery-client__hero-tag">GALERÍA DE FOTOS</span>
+              </div>
+              <div className="gallery-client__hero-body">
+                <p className="gallery-client__hero-meta">
+                  <span className="gallery-client__hero-client">{gallery.clientName}</span>
+                  {gallery.eventDate && (
+                    <span className="gallery-client__hero-date">
+                      {' · '}
+                      {new Date(`${gallery.eventDate}T12:00:00`).toLocaleDateString('es-AR', {
+                        day: 'numeric',
+                        month: 'long',
+                        year: 'numeric',
+                      })}
+                    </span>
+                  )}
+                </p>
+                <h1 className="gallery-client__hero-title">{gallery.title}</h1>
+                <div className="gallery-client__hero-bar">
+                  <span className="gallery-client__hero-count">
+                    <strong>{gallery.photos.length}</strong> {gallery.photos.length === 1 ? 'foto disponible' : 'fotos disponibles'}
+                  </span>
+                  <span className="gallery-client__hero-tip">
+                    Tocá una foto para ampliarla o usá <strong>＋</strong> para elegir tus fotos
+                  </span>
+                </div>
+              </div>
+            </header>
+
             {selectionError && <p className="gallery-client__selection-error" role="alert">{selectionError}</p>}
-            {gallery.photos.length ? <section className="gallery-client__grid" aria-label="Fotos disponibles">{gallery.photos.map((photo, index) => {
-              const isSelected = selected.includes(photo.id)
-              return <article key={photo.id} className={`gallery-client__photo ${isSelected ? 'is-selected' : ''}`}>
-                <button type="button" className="gallery-client__image-button" onClick={() => setPreviewIndex(index)} aria-label={`Ver foto ${index + 1} en grande`}><img src={photo.url} alt={`${gallery.title}, foto ${index + 1}`} loading={index < 3 ? 'eager' : 'lazy'} /></button>
-                <button type="button" className="gallery-client__check" onClick={() => togglePhoto(photo.id)} aria-pressed={isSelected} aria-label={`${isSelected ? 'Quitar' : 'Seleccionar'} foto ${index + 1}`}>{isSelected ? '✓' : '+'}</button>
-                <span className="gallery-client__photo-price">{photo.priceArs ? currency.format(photo.priceArs) : 'Sin cargo'}</span>
-              </article>
-            })}</section> : <div className="gallery-client__no-photos">Todavía no hay fotos en esta galería.</div>}
+            {gallery.photos.length ? (
+              <>
+                <section className="gallery-client__grid" aria-label="Fotos disponibles">
+                  {gallery.photos.slice(0, visibleCount).map((photo, index) => {
+                    const isSelected = selected.includes(photo.id)
+                    return (
+                      <PublicPhotoItem
+                        key={photo.id}
+                        photo={photo}
+                        index={index}
+                        galleryTitle={gallery.title}
+                        isSelected={isSelected}
+                        onOpenPreview={() => openPreview(index)}
+                        onToggle={() => togglePhoto(photo.id)}
+                      />
+                    )
+                  })}
+                </section>
+                {visibleCount < gallery.photos.length && (
+                  <div ref={sentinelRef} className="gallery-client__sentinel">
+                    <span className="gallery-spinner" />
+                    <p>Cargando más fotos ({visibleCount} de {gallery.photos.length})…</p>
+                    <button
+                      type="button"
+                      className="gallery-button gallery-button--quiet gallery-button--small"
+                      onClick={() => setVisibleCount((prev) => Math.min(prev + BATCH_SIZE * 2, gallery.photos.length))}
+                    >
+                      Cargar más fotos
+                    </button>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="gallery-client__no-photos">Todavía no hay fotos en esta galería.</div>
+            )}
             <section className="gallery-client__contact" aria-label="Contacto">
               <h2>Comunicate conmigo</h2>
               <div className="gallery-client__contact-actions">
@@ -518,7 +843,35 @@ function PublicGallery({ token }: { token: string }) {
             </section>
           </main>
           {selectedPhotos.length > 0 && <aside className="gallery-order-bar"><div><span>{selectedPhotos.length} {selectedPhotos.length === 1 ? 'foto seleccionada' : 'fotos seleccionadas'}</span><strong>{currency.format(total)}</strong></div><a href={orderUrl} target="_blank" rel="noreferrer"><WhatsAppLogo className="gallery-order-bar__whatsapp" /><span>Pedir por WhatsApp</span></a></aside>}
-          {previewIndex !== null && gallery.photos[previewIndex] && <div className="gallery-lightbox" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setPreviewIndex(null) }}><section className="gallery-lightbox__dialog" role="dialog" aria-modal="true" aria-label={`Vista previa de la foto ${previewIndex + 1}`}><button className="gallery-lightbox__close" type="button" onClick={() => setPreviewIndex(null)} aria-label="Cerrar vista previa">×</button>{gallery.photos.length > 1 && <button className="gallery-lightbox__nav gallery-lightbox__nav--previous" type="button" onClick={() => setPreviewIndex((previewIndex - 1 + gallery.photos.length) % gallery.photos.length)} aria-label="Foto anterior">‹</button>}<img src={gallery.photos[previewIndex].url} alt={`${gallery.title}, foto ${previewIndex + 1}`} /><div className="gallery-lightbox__caption"><span>{String(previewIndex + 1).padStart(2, '0')} / {String(gallery.photos.length).padStart(2, '0')} · {gallery.photos[previewIndex].filename}</span><button type="button" aria-pressed={selected.includes(gallery.photos[previewIndex].id)} onClick={() => togglePhoto(gallery.photos[previewIndex].id)}>{selected.includes(gallery.photos[previewIndex].id) ? '✓ Elegida' : '+ Elegir foto'}</button></div>{gallery.photos.length > 1 && <button className="gallery-lightbox__nav gallery-lightbox__nav--next" type="button" onClick={() => setPreviewIndex((previewIndex + 1) % gallery.photos.length)} aria-label="Foto siguiente">›</button>}</section></div>}
+          {previewIndex !== null && gallery.photos[previewIndex] && (
+            <div className="gallery-lightbox" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setPreviewIndex(null) }}>
+              <section className="gallery-lightbox__dialog" role="dialog" aria-modal="true" aria-label={`Vista previa de la foto ${previewIndex + 1}`}>
+                <button className="gallery-lightbox__close" type="button" onClick={() => setPreviewIndex(null)} aria-label="Cerrar vista previa">×</button>
+                {gallery.photos.length > 1 && (
+                  <button className="gallery-lightbox__nav gallery-lightbox__nav--previous" type="button" onClick={() => navigatePreview(-1)} aria-label="Foto anterior">‹</button>
+                )}
+                <div className="gallery-lightbox__media">
+                  <img
+                    src={gallery.photos[previewIndex].url}
+                    alt={`${gallery.title}, foto ${previewIndex + 1}`}
+                    draggable={false}
+                    decoding="async"
+                    onContextMenu={(e) => e.preventDefault()}
+                  />
+                  <PhotoWatermark />
+                </div>
+                <div className="gallery-lightbox__caption">
+                  <span>{String(previewIndex + 1).padStart(2, '0')} / {String(gallery.photos.length).padStart(2, '0')} · {gallery.photos[previewIndex].filename.replace(/^\[PORTADA\]\s*/i, '')}</span>
+                  <button type="button" aria-pressed={selected.includes(gallery.photos[previewIndex].id)} onClick={() => togglePhoto(gallery.photos[previewIndex].id)}>
+                    {selected.includes(gallery.photos[previewIndex].id) ? '✓ Elegida' : '+ Elegir foto'}
+                  </button>
+                </div>
+                {gallery.photos.length > 1 && (
+                  <button className="gallery-lightbox__nav gallery-lightbox__nav--next" type="button" onClick={() => navigatePreview(1)} aria-label="Foto siguiente">›</button>
+                )}
+              </section>
+            </div>
+          )}
         </>
       )}
     </div>
@@ -583,7 +936,13 @@ function PublishedGalleryCard({ gallery, index }: { gallery: PublishedGalleryLin
     <article className="public-gallery-directory__card">
       <a className="public-gallery-directory__card-link" href={galleryShareUrl(gallery.shareToken)}>
         <span className="public-gallery-directory__cover" aria-hidden="true">
-          {gallery.previewPhotos.length ? gallery.previewPhotos.map((photo, photoIndex) => <img className={photoIndex === activePhoto ? 'is-active' : ''} src={photo.url} alt="" loading="lazy" decoding="async" key={photo.id} />) : <span className="public-gallery-directory__cover-empty">FD</span>}
+          {gallery.coverPhotoUrl ? (
+            <img className="is-active" src={gallery.coverPhotoUrl} alt="" loading="lazy" decoding="async" />
+          ) : gallery.previewPhotos.length ? (
+            gallery.previewPhotos.map((photo, photoIndex) => <img className={photoIndex === activePhoto ? 'is-active' : ''} src={photo.url} alt="" loading="lazy" decoding="async" key={photo.id} />)
+          ) : (
+            <span className="public-gallery-directory__cover-empty">FD</span>
+          )}
           <span className="public-gallery-directory__cover-label">FOTOS · {String(index + 1).padStart(2, '0')}</span>
         </span>
         <span className="public-gallery-directory__details"><small>{gallery.eventDate ? `EVENTO · ${new Date(`${gallery.eventDate}T12:00:00`).toLocaleDateString('es-AR')}` : 'GALERÍA PUBLICADA'}</small><strong>{gallery.title}</strong></span>

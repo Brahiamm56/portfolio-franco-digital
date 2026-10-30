@@ -39,6 +39,9 @@ create table if not exists public.photo_galleries (
 alter table public.photo_galleries
   add column if not exists client_selected_photo_ids uuid[] not null default '{}'::uuid[];
 
+alter table public.photo_galleries
+  add column if not exists cover_photo_id uuid references public.gallery_photos(id) on delete set null;
+
 -- La lista de administradores se gestiona solo desde el SQL Editor.
 -- No se permite a una cuenta autenticada añadirse a sí misma.
 create table if not exists private.gallery_admins (
@@ -138,9 +141,9 @@ revoke all on public.photo_galleries from public, anon, authenticated;
 revoke all on public.gallery_photos from public, anon, authenticated;
 grant select (user_id) on private.gallery_admins to authenticated;
 grant select on public.photo_galleries, public.gallery_photos to authenticated;
-grant insert (owner_id, title, client_name, event_date, status, share_token)
+grant insert (owner_id, title, client_name, event_date, status, share_token, cover_photo_id)
   on public.photo_galleries to authenticated;
-grant update (status) on public.photo_galleries to authenticated;
+grant update (status, cover_photo_id) on public.photo_galleries to authenticated;
 grant delete on public.photo_galleries to authenticated;
 grant insert (gallery_id, original_filename, storage_path, price_ars)
   on public.gallery_photos to authenticated;
