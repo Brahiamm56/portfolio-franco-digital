@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import loginBackground from '../assets/projects/hercules/01.webp'
 import francoLogo from '../assets/franco-digital-logo.png'
+import francoPortrait from '../assets/franco-acuna-portrait.jpg'
 import { supabase } from './supabaseClient'
 import {
   addGalleryPhotos,
@@ -931,80 +932,135 @@ function PublicGallery({ token }: { token: string }) {
   )
 }
 
-function ReiconGalleryArrow({ className = '' }: { className?: string }) {
-  return <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M19 4.25C19.4142 4.25 19.75 4.58579 19.75 5V13C19.75 13.4142 19.4142 13.75 19 13.75C18.5858 13.75 18.25 13.4142 18.25 13V6.81066L5.53033 19.5303C5.23744 19.8232 4.76256 19.8232 4.46967 19.5303C4.17678 19.2374 4.17678 18.7626 4.46967 18.4697L17.1893 5.75H11C10.5858 5.75 10.25 5.41421 10.25 5C10.25 4.58579 10.5858 4.25 11 4.25H19Z" fill="currentColor" /></svg>
+function ReiconInstagram({ className = '' }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M9 22H15C20 22 22 20 22 15V9C22 4 20 2 15 2H9C4 2 2 4 2 9V15C2 20 4 22 9 22Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M12 15.5C13.933 15.5 15.5 13.933 15.5 12C15.5 10.067 13.933 8.5 12 8.5C10.067 8.5 8.5 10.067 8.5 12C8.5 13.933 10.067 15.5 12 15.5Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M17.6361 7H17.6477" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
 }
 
-function PublishedGalleryCard({ gallery, index }: { gallery: PublishedGalleryLink; index: number }) {
-  const [activePhoto, setActivePhoto] = useState(0)
-  const [shareFeedback, setShareFeedback] = useState('')
+function isGalleryNew(createdAt?: string, eventDate?: string): boolean {
+  const reference = createdAt || (eventDate ? `${eventDate}T12:00:00` : null)
+  if (!reference) return false
+  const time = new Date(reference).getTime()
+  if (Number.isNaN(time)) return false
+  const diffDays = (Date.now() - time) / (1000 * 60 * 60 * 24)
+  // Es nuevo si fue publicado/creado en los últimos 14 días
+  return diffDays >= -1 && diffDays <= 14
+}
+
+function formatEventDate(dateString?: string): string {
+  if (!dateString) return ''
+  const date = new Date(`${dateString}T12:00:00`)
+  if (Number.isNaN(date.getTime())) return ''
+  return date.toLocaleDateString('es-AR', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  }).replace('.', '')
+}
+
+function DirectoryCartButton() {
+  const [cartCount, setCartCount] = useState(0)
 
   useEffect(() => {
-    if (gallery.previewPhotos.length < 2) return
-    const timer = window.setInterval(() => {
-      setActivePhoto((current) => (current + 1) % gallery.previewPhotos.length)
-    }, 3200)
-    return () => window.clearInterval(timer)
-  }, [gallery.id, gallery.previewPhotos.length])
-
-  const copyShareLink = async (url: string) => {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(url)
-      return
-    }
-    const input = document.createElement('textarea')
-    input.value = url
-    input.style.position = 'fixed'
-    input.style.opacity = '0'
-    document.body.appendChild(input)
-    input.select()
-    const copied = document.execCommand('copy')
-    input.remove()
-    if (!copied) throw new Error('No se pudo copiar el enlace')
-  }
-
-  const shareGallery = async () => {
-    const url = galleryShareUrl(gallery.shareToken)
-    try {
-      if (navigator.share) {
-        await navigator.share({ title: gallery.title, text: `Galería de fotos: ${gallery.title}`, url })
-        setShareFeedback('Compartido')
-      } else {
-        await copyShareLink(url)
-        setShareFeedback('Enlace copiado')
+    const updateCount = () => {
+      let count = 0
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i)
+        if (key && (key.startsWith('gallery-selected-') || key.startsWith('gallery-cart-count-'))) {
+          try {
+            const raw = localStorage.getItem(key)
+            if (raw) {
+              const parsed = JSON.parse(raw)
+              if (Array.isArray(parsed)) count += parsed.length
+              else if (typeof parsed === 'number') count += parsed
+            }
+          } catch {
+            // ignore
+          }
+        }
       }
-    } catch (error) {
-      if (error instanceof DOMException && error.name === 'AbortError') return
-      try {
-        await copyShareLink(url)
-        setShareFeedback('Enlace copiado')
-      } catch {
-        setShareFeedback('No se pudo compartir')
-      }
+      setCartCount(count)
     }
-    window.setTimeout(() => setShareFeedback(''), 2200)
-  }
+
+    updateCount()
+    window.addEventListener('storage', updateCount)
+    return () => window.removeEventListener('storage', updateCount)
+  }, [])
 
   return (
-    <article className="public-gallery-directory__card">
-      <a className="public-gallery-directory__card-link" href={galleryShareUrl(gallery.shareToken)}>
-        <span className="public-gallery-directory__cover" aria-hidden="true">
-          {gallery.coverPhotoUrl ? (
-            <img className="is-active" src={gallery.coverPhotoUrl} alt="" loading="lazy" decoding="async" />
-          ) : gallery.previewPhotos.length ? (
-            gallery.previewPhotos.map((photo, photoIndex) => <img className={photoIndex === activePhoto ? 'is-active' : ''} src={photo.url} alt="" loading="lazy" decoding="async" key={photo.id} />)
+    <a
+      href="#eventos"
+      className="public-gallery-nav__cart"
+      aria-label={cartCount ? `Carrito: ${cartCount} fotos seleccionadas` : 'Carrito'}
+      title={cartCount ? `${cartCount} fotos seleccionadas` : 'Carrito'}
+    >
+      <ReiconCart className="public-gallery-nav__cart-icon" />
+      {cartCount > 0 && <span className="public-gallery-nav__cart-badge">{cartCount}</span>}
+    </a>
+  )
+}
+
+function PublishedEventCard({ gallery }: { gallery: PublishedGalleryLink }) {
+  const isNew = isGalleryNew(gallery.createdAt, gallery.eventDate)
+  const formattedDate = formatEventDate(gallery.eventDate)
+  const coverUrl = gallery.coverPhotoUrl || gallery.previewPhotos[0]?.url
+
+  return (
+    <article className="public-event-card">
+      <a
+        href={galleryShareUrl(gallery.shareToken)}
+        className="public-event-card__link"
+        aria-label={`Ver fotos de ${gallery.title}`}
+      >
+        <div className="public-event-card__media">
+          {coverUrl ? (
+            <img
+              src={coverUrl}
+              alt={`Portada de ${gallery.title}`}
+              loading="lazy"
+              decoding="async"
+              className="public-event-card__img"
+            />
           ) : (
-            <span className="public-gallery-directory__cover-empty">FD</span>
+            <div className="public-event-card__placeholder">
+              <PhotoMark />
+            </div>
           )}
-          <span className="public-gallery-directory__cover-label">FOTOS · {String(index + 1).padStart(2, '0')}</span>
-        </span>
-        <span className="public-gallery-directory__details"><small>{gallery.eventDate ? `EVENTO · ${new Date(`${gallery.eventDate}T12:00:00`).toLocaleDateString('es-AR')}` : 'GALERÍA PUBLICADA'}</small><strong>{gallery.title}</strong></span>
-        <span className="public-gallery-directory__action">Abrir galería <ReiconGalleryArrow className="public-gallery-directory__open-icon" /></span>
+
+          {/* Etiqueta Nuevo si es reciente (desaparece si ya no es nuevo) */}
+          {isNew && (
+            <span className="public-event-card__badge-new">
+              Nuevo
+            </span>
+          )}
+
+          {/* Insignia con conteo de fotos */}
+          <span className="public-event-card__badge-count">
+            <svg viewBox="0 0 24 24" fill="none" className="public-event-card__camera-icon" aria-hidden="true">
+              <path d="M4 7H8L9.5 5H14.5L16 7H20C21.1 7 22 7.9 22 9V19C22 20.1 21.1 21 20 21H4C2.9 21 2 20.1 2 19V9C2 7.9 2.9 7 4 7Z" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+              <circle cx="12" cy="14" r="3.5" stroke="currentColor" strokeWidth="1.6" />
+            </svg>
+            <span>
+              {gallery.photoCount
+                ? `${gallery.photoCount.toLocaleString('es-AR')} fotos`
+                : 'Ver fotos'}
+            </span>
+          </span>
+        </div>
+
+        <div className="public-event-card__body">
+          <h3 className="public-event-card__title">{gallery.title}</h3>
+          <p className="public-event-card__meta">
+            {formattedDate}
+            {gallery.clientName ? ` · ${gallery.clientName}` : ''}
+          </p>
+        </div>
       </a>
-      <button className="public-gallery-directory__share" type="button" onClick={() => void shareGallery()} aria-label={`Compartir galería ${gallery.title}`} title="Compartir galería">
-        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path fillRule="evenodd" clipRule="evenodd" d="M16.5 2.25C14.7051 2.25 13.25 3.70507 13.25 5.5C13.25 5.69591 13.2673 5.88776 13.3006 6.07412L8.56991 9.38558C8.54587 9.4024 8.52312 9.42038 8.50168 9.43939C7.94993 9.00747 7.25503 8.75 6.5 8.75C4.70507 8.75 3.25 10.2051 3.25 12C3.25 13.7949 4.70507 15.25 6.5 15.25C7.25503 15.25 7.94993 14.9925 8.50168 14.5606C8.52312 14.5796 8.54587 14.5976 8.56991 14.6144L13.3006 17.9259C13.2673 18.1122 13.25 18.3041 13.25 18.5C13.25 20.2949 14.7051 21.75 16.5 21.75C18.2949 21.75 19.75 20.2949 19.75 18.5C19.75 16.7051 18.2949 15.25 16.5 15.25C15.4472 15.25 14.5113 15.7506 13.9174 16.5267L9.43806 13.3911C9.63809 12.9694 9.75 12.4978 9.75 12C9.75 11.5022 9.63809 11.0306 9.43806 10.6089L13.9174 7.4733C14.5113 8.24942 15.4472 8.75 16.5 8.75C18.2949 8.75 19.75 7.29493 19.75 5.5C19.75 3.70507 18.2949 2.25 16.5 2.25ZM14.75 5.5C14.75 4.5335 15.5335 3.75 16.5 3.75C17.4665 3.75 18.25 4.5335 18.25 5.5C18.25 6.4665 17.4665 7.25 16.5 7.25C15.5335 7.25 14.75 6.4665 14.75 5.5ZM6.5 10.25C5.5335 10.25 4.75 11.0335 4.75 12C4.75 12.9665 5.5335 13.75 6.5 13.75C7.4665 13.75 8.25 12.9665 8.25 12C8.25 11.0335 7.4665 10.25 6.5 10.25ZM16.5 16.75C15.5335 16.75 14.75 17.5335 14.75 18.5C14.75 19.4665 15.5335 20.25 16.5 20.25C17.4665 20.25 18.25 19.4665 18.25 18.5C18.25 17.5335 17.4665 16.75 16.5 16.75Z" fill="currentColor" /></svg>
-      </button>
-      {shareFeedback && <span className="public-gallery-directory__share-feedback" role="status">{shareFeedback}</span>}
     </article>
   )
 }
@@ -1014,7 +1070,6 @@ function PublicGalleryDirectory() {
   const [loading, setLoading] = useState(true)
   const [failed, setFailed] = useState(false)
   const [search, setSearch] = useState('')
-  const [searchVisible, setSearchVisible] = useState(true)
 
   useEffect(() => {
     let active = true
@@ -1031,52 +1086,124 @@ function PublicGalleryDirectory() {
       .forEach((photo) => URL.revokeObjectURL(photo.url))
   }, [galleries])
 
-  useEffect(() => {
-    let previousY = window.scrollY
-    const onScroll = () => {
-      const currentY = Math.max(0, window.scrollY)
-      const delta = currentY - previousY
-      if (currentY < 80 || delta < -3) setSearchVisible(true)
-      else if (delta > 4) setSearchVisible(false)
-      previousY = currentY
-    }
-    window.addEventListener('scroll', onScroll, { passive: true })
-    return () => window.removeEventListener('scroll', onScroll)
-  }, [])
-
   const normalizeSearch = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('es-AR').trim()
   const normalizedQuery = normalizeSearch(search)
   const visibleGalleries = galleries.filter((gallery) => {
     if (!normalizedQuery) return true
     const date = gallery.eventDate ? new Date(`${gallery.eventDate}T12:00:00`).toLocaleDateString('es-AR') : ''
-    return normalizeSearch(`${gallery.title} ${gallery.eventDate} ${date}`).includes(normalizedQuery)
+    const client = gallery.clientName ?? ''
+    return normalizeSearch(`${gallery.title} ${gallery.eventDate} ${date} ${client}`).includes(normalizedQuery)
   })
 
   return (
-    <section className="public-gallery-directory route-view">
-      <div className={`public-gallery-directory__search-dock ${searchVisible ? 'is-visible' : ''}`}>
-        <label className="public-gallery-directory__search">
-          <span className="public-gallery-directory__search-icon" aria-hidden="true">⌕</span>
-          <span className="sr-only">Buscar fotos públicas</span>
-          <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscá por evento o fecha" autoComplete="off" />
-          {search && <button type="button" onClick={() => setSearch('')} aria-label="Limpiar búsqueda">×</button>}
-        </label>
-      </div>
-      <div className="public-gallery-directory__content">
-        <a className="gallery-client__back public-gallery-directory__back" href="/" aria-label="Volver al inicio"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><g clipPath="url(#gallery-directory-back-clip)"><path d="M13.5303 8.53033C13.8232 8.23744 13.8232 7.76256 13.5303 7.46967C13.2374 7.17678 12.7626 7.17678 12.4697 7.46967L8.46967 11.4697C8.32902 11.6103 8.25 11.8011 8.25 12C8.25 12.1989 8.32902 12.3897 8.46967 12.5303L12.4697 16.5303C12.7626 16.8232 13.2374 16.8232 13.5303 16.5303C13.8232 16.2374 13.8232 15.7626 13.5303 15.4697L10.0607 12L13.5303 8.53033Z" fill="currentColor" /><path fillRule="evenodd" clipRule="evenodd" d="M12 .25C5.51065 .25 .25 5.51065 .25 12S5.51065 23.75 12 23.75 23.75 18.4893 23.75 12 18.4893 .25 12 .25ZM1.75 12C1.75 6.33908 6.33908 1.75 12 1.75S22.25 6.33908 22.25 12 17.6609 22.25 12 22.25 1.75 17.6609 1.75 12Z" fill="currentColor" /></g><defs><clipPath id="gallery-directory-back-clip"><rect width="24" height="24" fill="currentColor" /></clipPath></defs></svg>Volver al inicio</a>
-        <h1>Fotos públicas</h1>
-        <p className="public-gallery-directory__subtitle">Buscá tus fotos acá.</p>
-        {loading ? <div className="public-gallery-directory__state"><span className="gallery-spinner" />Cargando fotos…</div> : failed ? (
-          <div className="public-gallery-directory__state">No pudimos cargar las fotos ahora. Volvé a intentarlo en unos minutos.</div>
+    <div className="public-gallery-directory route-view">
+      {/* Hero superior con fondo de Franco, perfil centrado y barra de nav */}
+      <header className="public-gallery-hero">
+        <img
+          src={francoPortrait}
+          alt="Franco Digital Fotografía"
+          className="public-gallery-hero__bg"
+          decoding="async"
+        />
+        <div className="public-gallery-hero__overlay" aria-hidden="true" />
+
+        {/* Barra superior: Volver a la izquierda y Carrito a la derecha */}
+        <nav className="public-gallery-nav" aria-label="Navegación de galerías">
+          <a href="/" className="public-gallery-nav__back" aria-label="Volver al inicio" title="Volver al inicio">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M15 19L8 12L15 5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </a>
+          <DirectoryCartButton />
+        </nav>
+
+        {/* Perfil central: avatar con logo, nombre y red social */}
+        <div className="public-gallery-hero__content">
+          <div className="public-gallery-hero__avatar">
+            <img src={francoLogo} alt="Logo Franco Digital" className="public-gallery-hero__logo" />
+          </div>
+          <h1 className="public-gallery-hero__title">francodigital</h1>
+          <a
+            href="https://www.instagram.com/francodigital__/"
+            target="_blank"
+            rel="noreferrer"
+            className="public-gallery-hero__instagram"
+            aria-label="Instagram @francodigital__"
+          >
+            <ReiconInstagram className="public-gallery-hero__instagram-icon" />
+            <span>@francodigital__</span>
+          </a>
+        </div>
+
+        {/* Buscador de eventos anclado al borde inferior del hero */}
+        <div className="public-gallery-search-wrap">
+          <label className="public-gallery-search">
+            <svg viewBox="0 0 24 24" fill="none" className="public-gallery-search__icon" aria-hidden="true">
+              <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
+              <path d="M20 20L16.5 16.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+            <input
+              type="search"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Buscá tu evento"
+              autoComplete="off"
+              aria-label="Buscar tu evento"
+            />
+            {search && (
+              <button
+                type="button"
+                className="public-gallery-search__clear"
+                onClick={() => setSearch('')}
+                aria-label="Limpiar búsqueda"
+              >
+                ×
+              </button>
+            )}
+          </label>
+        </div>
+      </header>
+
+      {/* Listado de eventos */}
+      <main className="public-gallery-main" id="eventos">
+        <div className="public-gallery-heading">
+          <h2>Eventos</h2>
+          <span className="public-gallery-count">{visibleGalleries.length}</span>
+        </div>
+
+        {loading ? (
+          <div className="public-gallery-state">
+            <span className="gallery-spinner" />
+            <p>Cargando eventos…</p>
+          </div>
+        ) : failed ? (
+          <div className="public-gallery-state">
+            <p>No pudimos cargar los eventos ahora. Volvé a intentarlo en unos minutos.</p>
+          </div>
         ) : galleries.length === 0 ? (
-          <div className="public-gallery-directory__state">Todavía no hay fotos públicas.</div>
+          <div className="public-gallery-state">
+            <p>Todavía no hay eventos publicados.</p>
+          </div>
         ) : visibleGalleries.length === 0 ? (
-          <div className="public-gallery-directory__state"><span>No encontramos galerías con esa búsqueda.</span><button type="button" onClick={() => setSearch('')}>Limpiar búsqueda</button></div>
+          <div className="public-gallery-state">
+            <p>No encontramos eventos con esa búsqueda.</p>
+            <button
+              type="button"
+              className="gallery-button gallery-button--quiet"
+              onClick={() => setSearch('')}
+            >
+              Ver todos los eventos
+            </button>
+          </div>
         ) : (
-          <div className="public-gallery-directory__list">{visibleGalleries.map((gallery, index) => <PublishedGalleryCard gallery={gallery} index={visibleGalleries.length - index} key={gallery.id} />)}</div>
+          <div className="public-gallery-grid">
+            {visibleGalleries.map((gallery) => (
+              <PublishedEventCard key={gallery.id} gallery={gallery} />
+            ))}
+          </div>
         )}
-      </div>
-    </section>
+      </main>
+    </div>
   )
 }
 

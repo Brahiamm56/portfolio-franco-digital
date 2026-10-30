@@ -80,16 +80,16 @@ const handleRequest = withSupabase({ auth: 'publishable' }, async (request, cont
   if (listPublished) {
     const { data: galleries, error } = await context.supabaseAdmin
       .from('photo_galleries')
-      .select('id, title, event_date, share_token, created_at')
+      .select('id, title, client_name, event_date, share_token, created_at')
       .eq('status', 'published')
       .order('created_at', { ascending: false })
       .limit(100)
 
     if (error) return json({ error: 'No pudimos cargar las galerías.' }, 500)
     const galleriesWithPreviews = await Promise.all((galleries ?? []).map(async (gallery) => {
-      const { data: photos, error: photosError } = await context.supabaseAdmin
+      const { data: photos, count: totalPhotos, error: photosError } = await context.supabaseAdmin
         .from('gallery_photos')
-        .select('id, storage_path')
+        .select('id, storage_path', { count: 'exact' })
         .eq('gallery_id', gallery.id)
         .order('created_at', { ascending: true })
         .limit(4)
@@ -105,9 +105,11 @@ const handleRequest = withSupabase({ auth: 'publishable' }, async (request, cont
       return {
         id: gallery.id,
         title: gallery.title,
+        clientName: gallery.client_name ?? '',
         eventDate: gallery.event_date ?? '',
         shareToken: gallery.share_token,
         createdAt: gallery.created_at,
+        photoCount: totalPhotos ?? previewPhotos.length,
         previewPhotos: previewPhotos.filter((photo) => photo !== null),
       }
     }))

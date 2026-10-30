@@ -43,6 +43,8 @@ export type PublicPhotoGallery = Pick<PhotoGallery, 'id' | 'title' | 'clientName
 }
 
 export type PublishedGalleryLink = Pick<PhotoGallery, 'id' | 'title' | 'eventDate' | 'shareToken' | 'createdAt'> & {
+  clientName?: string
+  photoCount?: number
   coverPhotoUrl?: string | null
   previewPhotos: Array<Pick<GalleryPhoto, 'id' | 'url'>>
 }
@@ -656,7 +658,7 @@ export async function listPublishedGalleries(): Promise<PublishedGalleryLink[]> 
     return Promise.all(
       readLocalGalleries()
         .filter((gallery) => gallery.status === 'published')
-        .map(async ({ id, title, eventDate, shareToken, createdAt, photos, coverPhotoId }) => {
+        .map(async ({ id, title, clientName, eventDate, shareToken, createdAt, photos, coverPhotoId }) => {
           const loadedPhotos = await Promise.all(photos.map(async (photo) => {
             const asset = await getDemoAsset(photo.id)
             return { id: photo.id, url: asset ? URL.createObjectURL(asset) : '', filename: photo.filename }
@@ -668,9 +670,11 @@ export async function listPublishedGalleries(): Promise<PublishedGalleryLink[]> 
           return {
             id,
             title,
+            clientName,
             eventDate,
             shareToken,
             createdAt,
+            photoCount: photos.length,
             coverPhotoUrl: cover?.url ?? null,
             previewPhotos,
           }
@@ -681,7 +685,7 @@ export async function listPublishedGalleries(): Promise<PublishedGalleryLink[]> 
 
   const { data, error } = await supabase!.functions.invoke('public-gallery', { body: { action: 'list' } })
   if (error) throw error
-  const galleries = (data?.galleries ?? []) as PublishedGalleryLink[]
+  const galleries = (data?.galleries ?? []) as Array<PublishedGalleryLink & Record<string, unknown>>
   return galleries.map((gallery) => {
     const localCover = typeof window !== 'undefined' ? localStorage.getItem(`gallery-cover-${gallery.id}`) : null
     const cover = resolveGalleryCoverPhoto(gallery.previewPhotos, localCover)
@@ -690,6 +694,8 @@ export async function listPublishedGalleries(): Promise<PublishedGalleryLink[]> 
       : gallery.previewPhotos
     return {
       ...gallery,
+      clientName: gallery.clientName || (gallery.client_name as string) || undefined,
+      photoCount: typeof gallery.photoCount === 'number' ? gallery.photoCount : (typeof gallery.photo_count === 'number' ? gallery.photo_count : undefined),
       coverPhotoUrl: cover?.url ?? previewPhotos[0]?.url ?? null,
       previewPhotos,
     }
