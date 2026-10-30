@@ -643,6 +643,150 @@ function PublicPhotoItem({
   )
 }
 
+function TrashIcon({ className = '' }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M19 7L18.133 19.142A2 2 0 0 1 16.138 21H7.862a2 2 0 0 1-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v3M4 7h16"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+function CartBottomSheet({
+  isOpen,
+  onClose,
+  photos,
+  total,
+  orderUrl,
+  onRemovePhoto,
+}: {
+  isOpen: boolean
+  onClose: () => void
+  photos: { id: string; filename: string; priceArs: number; url: string }[]
+  total: number
+  orderUrl: string
+  onRemovePhoto: (id: string) => void
+}) {
+  useEffect(() => {
+    if (!isOpen) return
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.body.style.overflow = prevOverflow
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isOpen, onClose])
+
+  if (!isOpen) return null
+
+  return (
+    <div className="gallery-bottom-sheet" role="dialog" aria-modal="true" aria-label="Carrito de fotos">
+      <div className="gallery-bottom-sheet__backdrop" onClick={onClose} aria-hidden="true" />
+      <div className="gallery-bottom-sheet__panel">
+        <div
+          className="gallery-bottom-sheet__handle-bar"
+          onClick={onClose}
+          role="button"
+          tabIndex={0}
+          aria-label="Cerrar panel"
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClose() } }}
+        >
+          <span className="gallery-bottom-sheet__handle" />
+        </div>
+
+        <header className="gallery-bottom-sheet__header">
+          <div className="gallery-bottom-sheet__header-title">
+            <ReiconCart className="gallery-bottom-sheet__header-icon" />
+            <h3>Fotos en el carrito</h3>
+            <span className="gallery-bottom-sheet__count">{photos.length}</span>
+          </div>
+          <button
+            type="button"
+            className="gallery-bottom-sheet__close"
+            onClick={onClose}
+            aria-label="Cerrar carrito"
+          >
+            ✕
+          </button>
+        </header>
+
+        <div className="gallery-bottom-sheet__body">
+          {photos.length === 0 ? (
+            <div className="gallery-bottom-sheet__empty">
+              <p>Todavía no agregaste fotos a tu carrito.</p>
+              <button
+                type="button"
+                className="gallery-button gallery-button--small"
+                onClick={onClose}
+              >
+                Volver a la galería
+              </button>
+            </div>
+          ) : (
+            <ul className="gallery-bottom-sheet__list">
+              {photos.map((photo) => (
+                <li key={photo.id} className="gallery-bottom-sheet__item">
+                  <img
+                    src={photo.url}
+                    alt={photo.filename}
+                    className="gallery-bottom-sheet__thumb"
+                    loading="lazy"
+                  />
+                  <div className="gallery-bottom-sheet__item-info">
+                    <span className="gallery-bottom-sheet__item-name" title={photo.filename}>
+                      {photo.filename.replace(/^\[PORTADA\]\s*/i, '')}
+                    </span>
+                    <span className="gallery-bottom-sheet__item-price">
+                      {photo.priceArs ? currency.format(photo.priceArs) : 'Sin cargo'}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className="gallery-bottom-sheet__remove"
+                    onClick={() => onRemovePhoto(photo.id)}
+                    aria-label={`Quitar ${photo.filename} del carrito`}
+                    title="Quitar foto"
+                  >
+                    <TrashIcon />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        {photos.length > 0 && (
+          <footer className="gallery-bottom-sheet__footer">
+            <div className="gallery-bottom-sheet__subtotal">
+              <span>Total ({photos.length} {photos.length === 1 ? 'foto' : 'fotos'})</span>
+              <strong>{currency.format(total)}</strong>
+            </div>
+            <a
+              href={orderUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="gallery-bottom-sheet__cta"
+              onClick={onClose}
+            >
+              <WhatsAppLogo className="gallery-bottom-sheet__whatsapp-icon" />
+              <span>Pedir por WhatsApp</span>
+            </a>
+          </footer>
+        )}
+      </div>
+    </div>
+  )
+}
+
 const BATCH_SIZE = 12
 
 function PublicGallery({ token }: { token: string }) {
@@ -653,6 +797,7 @@ function PublicGallery({ token }: { token: string }) {
   const [unavailable, setUnavailable] = useState(false)
   const [selectionError, setSelectionError] = useState('')
   const [visibleCount, setVisibleCount] = useState(BATCH_SIZE)
+  const [cartSheetOpen, setCartSheetOpen] = useState(false)
   const sentinelRef = useRef<HTMLDivElement | null>(null)
   const selectionQueue = useRef(Promise.resolve())
 
@@ -902,7 +1047,20 @@ function PublicGallery({ token }: { token: string }) {
               className={`gallery-order-bar ${previewIndex !== null ? 'is-in-lightbox' : ''}`}
               aria-label="Carrito de fotos seleccionadas"
             >
-              <div className="gallery-order-bar__summary">
+              <div
+                className="gallery-order-bar__summary"
+                role="button"
+                tabIndex={0}
+                onClick={() => setCartSheetOpen(true)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    setCartSheetOpen(true)
+                  }
+                }}
+                aria-label="Abrir carrito y ver fotos seleccionadas"
+                title="Abrir fotos del carrito"
+              >
                 <div className="gallery-order-bar__icon-bubble">
                   <ReiconCart className="gallery-order-bar__cart-icon" />
                   <span className="gallery-order-bar__badge" key={selectedPhotos.length}>
@@ -910,7 +1068,10 @@ function PublicGallery({ token }: { token: string }) {
                   </span>
                 </div>
                 <div className="gallery-order-bar__meta">
-                  <span>{selectedPhotos.length} {selectedPhotos.length === 1 ? 'foto seleccionada' : 'fotos seleccionadas'}</span>
+                  <span className="gallery-order-bar__meta-label">
+                    {selectedPhotos.length} {selectedPhotos.length === 1 ? 'foto seleccionada' : 'fotos seleccionadas'}
+                    <span className="gallery-order-bar__open-indicator"> · Ver fotos ⌃</span>
+                  </span>
                   <strong>{currency.format(total)}</strong>
                 </div>
               </div>
@@ -926,6 +1087,15 @@ function PublicGallery({ token }: { token: string }) {
               </a>
             </aside>
           )}
+
+          <CartBottomSheet
+            isOpen={cartSheetOpen}
+            onClose={() => setCartSheetOpen(false)}
+            photos={selectedPhotos}
+            total={total}
+            orderUrl={orderUrl}
+            onRemovePhoto={(id) => togglePhoto(id)}
+          />
         </>
       )}
     </div>
@@ -963,7 +1133,119 @@ function formatEventDate(dateString?: string): string {
   }).replace('.', '')
 }
 
-function DirectoryCartButton() {
+function DirectoryCartSheet({
+  isOpen,
+  onClose,
+  galleries,
+}: {
+  isOpen: boolean
+  onClose: () => void
+  galleries: PublishedGalleryLink[]
+}) {
+  const activeItems = useMemo(() => {
+    if (!isOpen) return []
+    const items: { gallery: PublishedGalleryLink; count: number }[] = []
+    for (const g of galleries) {
+      try {
+        const raw = localStorage.getItem(`gallery-selected-${g.shareToken}`)
+        if (raw) {
+          const parsed = JSON.parse(raw)
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            items.push({ gallery: g, count: parsed.length })
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }
+    return items
+  }, [isOpen, galleries])
+
+  useEffect(() => {
+    if (!isOpen) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.body.style.overflow = prev
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isOpen, onClose])
+
+  if (!isOpen) return null
+
+  return (
+    <div className="gallery-bottom-sheet" role="dialog" aria-modal="true" aria-label="Carrito">
+      <div className="gallery-bottom-sheet__backdrop" onClick={onClose} aria-hidden="true" />
+      <div className="gallery-bottom-sheet__panel">
+        <div
+          className="gallery-bottom-sheet__handle-bar"
+          onClick={onClose}
+          role="button"
+          tabIndex={0}
+          aria-label="Cerrar panel"
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClose() } }}
+        >
+          <span className="gallery-bottom-sheet__handle" />
+        </div>
+        <header className="gallery-bottom-sheet__header">
+          <div className="gallery-bottom-sheet__header-title">
+            <ReiconCart className="gallery-bottom-sheet__header-icon" />
+            <h3>Tu carrito</h3>
+          </div>
+          <button type="button" className="gallery-bottom-sheet__close" onClick={onClose} aria-label="Cerrar">✕</button>
+        </header>
+        <div className="gallery-bottom-sheet__body">
+          {activeItems.length === 0 ? (
+            <div className="gallery-bottom-sheet__empty">
+              <p>No tenés fotos guardadas todavía.</p>
+              <p style={{ fontSize: '0.75rem', color: '#7a7d80', margin: 0 }}>Entrá a un evento para elegir tus fotos favoritas.</p>
+              <button
+                type="button"
+                className="gallery-button gallery-button--small"
+                onClick={() => {
+                  onClose()
+                  const el = document.getElementById('eventos')
+                  el?.scrollIntoView({ behavior: 'smooth' })
+                }}
+              >
+                Explorar eventos
+              </button>
+            </div>
+          ) : (
+            <ul className="gallery-bottom-sheet__list">
+              {activeItems.map(({ gallery, count }) => (
+                <li key={gallery.id} className="gallery-bottom-sheet__item">
+                  <img
+                    src={gallery.coverPhotoUrl || gallery.previewPhotos[0]?.url}
+                    alt={gallery.title}
+                    className="gallery-bottom-sheet__thumb"
+                  />
+                  <div className="gallery-bottom-sheet__item-info">
+                    <span className="gallery-bottom-sheet__item-name">{gallery.title}</span>
+                    <span className="gallery-bottom-sheet__item-price">{count} {count === 1 ? 'foto elegida' : 'fotos elegidas'}</span>
+                  </div>
+                  <a
+                    href={galleryShareUrl(gallery.shareToken)}
+                    className="gallery-button gallery-button--primary gallery-button--small"
+                    style={{ minHeight: '34px', fontSize: '0.68rem', paddingInline: '0.8rem', flexShrink: 0 }}
+                  >
+                    Ver fotos
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function DirectoryCartButton({ onClick }: { onClick: () => void }) {
   const [cartCount, setCartCount] = useState(0)
 
   useEffect(() => {
@@ -993,15 +1275,16 @@ function DirectoryCartButton() {
   }, [])
 
   return (
-    <a
-      href="#eventos"
+    <button
+      type="button"
+      onClick={onClick}
       className="public-gallery-nav__cart"
       aria-label={cartCount ? `Carrito: ${cartCount} fotos seleccionadas` : 'Carrito'}
       title={cartCount ? `${cartCount} fotos seleccionadas` : 'Carrito'}
     >
       <ReiconCart className="public-gallery-nav__cart-icon" />
       {cartCount > 0 && <span className="public-gallery-nav__cart-badge">{cartCount}</span>}
-    </a>
+    </button>
   )
 }
 
@@ -1070,6 +1353,7 @@ function PublicGalleryDirectory() {
   const [loading, setLoading] = useState(true)
   const [failed, setFailed] = useState(false)
   const [search, setSearch] = useState('')
+  const [cartModalOpen, setCartModalOpen] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -1114,7 +1398,7 @@ function PublicGalleryDirectory() {
               <path d="M15 19L8 12L15 5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </a>
-          <DirectoryCartButton />
+          <DirectoryCartButton onClick={() => setCartModalOpen(true)} />
         </nav>
 
         {/* Perfil central: avatar con logo, nombre y red social */}
@@ -1203,6 +1487,12 @@ function PublicGalleryDirectory() {
           </div>
         )}
       </main>
+
+      <DirectoryCartSheet
+        isOpen={cartModalOpen}
+        onClose={() => setCartModalOpen(false)}
+        galleries={galleries}
+      />
     </div>
   )
 }

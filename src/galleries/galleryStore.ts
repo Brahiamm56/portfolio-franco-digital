@@ -535,18 +535,45 @@ export async function deleteGallery(galleryId: string) {
   }
   ensureSupabaseConfigured()
 
-  const { data: photos, error: photosError } = await supabase!
+  // 1. Desvincular portada para evitar conflictos de clave foránea circular
+  try {
+    await supabase!
+      .from('photo_galleries')
+      .update({ cover_photo_id: null } as unknown as never)
+      .eq('id', galleryId)
+  } catch (cause) {
+    console.warn('Advertencia al desvincular cover_photo_id:', cause)
+  }
+
+  // 2. Obtener y remover archivos del storage
+  const { data: photos } = await supabase!
     .from('gallery_photos')
     .select('storage_path')
     .eq('gallery_id', galleryId)
-  if (photosError) throw photosError
 
-  const storagePaths = (photos ?? []).map((photo) => photo.storage_path)
+  const storagePaths = (photos ?? []).map((photo) => photo.storage_path).filter(Boolean)
   if (storagePaths.length) {
-    const { error: storageError } = await supabase!.storage.from(STORAGE_BUCKET).remove(storagePaths)
-    if (storageError) throw storageError
+    try {
+      const { error: storageError } = await supabase!.storage.from(STORAGE_BUCKET).remove(storagePaths)
+      if (storageError) {
+        console.warn('Advertencia al remover archivos de storage:', storageError)
+      }
+    } catch (storageErr) {
+      console.warn('Error capturado al remover archivos de storage:', storageErr)
+    }
   }
 
+  // 3. Eliminar fotos de la base de datos explícitamente
+  try {
+    await supabase!
+      .from('gallery_photos')
+      .delete()
+      .eq('gallery_id', galleryId)
+  } catch (cause) {
+    console.warn('Advertencia al eliminar fotos de gallery_photos:', cause)
+  }
+
+  // 4. Eliminar el registro de la galería
   const { error: galleryError } = await supabase!
     .from('photo_galleries')
     .delete()
