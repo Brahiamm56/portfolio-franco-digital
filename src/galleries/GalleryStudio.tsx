@@ -880,7 +880,7 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
       photos: g.photos.map((p) => p.id === photoId ? { ...p, allowDownload: enabled } : p),
     })))
     setNotice(enabled ? 'Descarga habilitada para esta foto.' : 'Descarga deshabilitada para esta foto.')
-    setPhotoDownload(photoId, enabled)
+    void setPhotoDownload(photoId, enabled)
   }
 
   const handleSetAllDownload = (galleryId: string, enabled: boolean) => {
@@ -1269,19 +1269,33 @@ function PublicPhotoItem({
 
   const handleDownload = async (e: React.MouseEvent) => {
     e.stopPropagation()
+    const fileName = cleanPhotoFilename(photo.filename) || `foto-${index + 1}.jpg`
     try {
       const response = await fetch(photo.url)
+      if (!response.ok) throw new Error('Fetch failed')
       const blob = await response.blob()
-      const url = URL.createObjectURL(blob)
+      const blobUrl = URL.createObjectURL(blob)
       const a = document.createElement('a')
-      a.href = url
-      a.download = cleanPhotoFilename(photo.filename) || `foto-${index + 1}.jpg`
+      a.href = blobUrl
+      a.download = fileName
+      a.rel = 'noopener noreferrer'
       document.body.appendChild(a)
       a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
+      setTimeout(() => {
+        document.body.removeChild(a)
+        URL.revokeObjectURL(blobUrl)
+      }, 5000)
     } catch {
-      window.open(photo.url, '_blank')
+      const a = document.createElement('a')
+      a.href = photo.url
+      a.target = '_blank'
+      a.download = fileName
+      a.rel = 'noopener noreferrer'
+      document.body.appendChild(a)
+      a.click()
+      setTimeout(() => {
+        document.body.removeChild(a)
+      }, 1500)
     }
   }
 
@@ -1743,19 +1757,33 @@ function PublicGallery({ token }: { token: string }) {
                         title="Descargar foto"
                         onClick={async () => {
                           const currentPhoto = gallery.photos[previewIndex]
+                          const fileName = cleanPhotoFilename(currentPhoto.filename) || `foto-${previewIndex + 1}.jpg`
                           try {
                             const response = await fetch(currentPhoto.url)
+                            if (!response.ok) throw new Error('Fetch failed')
                             const blob = await response.blob()
-                            const url = URL.createObjectURL(blob)
+                            const blobUrl = URL.createObjectURL(blob)
                             const a = document.createElement('a')
-                            a.href = url
-                            a.download = cleanPhotoFilename(currentPhoto.filename) || `foto-${previewIndex + 1}.jpg`
+                            a.href = blobUrl
+                            a.download = fileName
+                            a.rel = 'noopener noreferrer'
                             document.body.appendChild(a)
                             a.click()
-                            document.body.removeChild(a)
-                            URL.revokeObjectURL(url)
+                            setTimeout(() => {
+                              document.body.removeChild(a)
+                              URL.revokeObjectURL(blobUrl)
+                            }, 5000)
                           } catch {
-                            window.open(currentPhoto.url, '_blank')
+                            const a = document.createElement('a')
+                            a.href = currentPhoto.url
+                            a.target = '_blank'
+                            a.download = fileName
+                            a.rel = 'noopener noreferrer'
+                            document.body.appendChild(a)
+                            a.click()
+                            setTimeout(() => {
+                              document.body.removeChild(a)
+                            }, 1500)
                           }
                         }}
                       >

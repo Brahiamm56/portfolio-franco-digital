@@ -21,6 +21,7 @@ export type Database = {
           price_ars: number
           storage_path: string
           has_watermark: boolean
+          allow_download: boolean
         }
         Insert: {
           created_at?: string
@@ -30,6 +31,7 @@ export type Database = {
           price_ars?: number
           storage_path: string
           has_watermark?: boolean
+          allow_download?: boolean
         }
         Update: {
           created_at?: string
@@ -39,6 +41,7 @@ export type Database = {
           price_ars?: number
           storage_path?: string
           has_watermark?: boolean
+          allow_download?: boolean
         }
         Relationships: [
           {

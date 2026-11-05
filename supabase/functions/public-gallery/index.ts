@@ -205,7 +205,7 @@ const handleRequest = withSupabase({ auth: 'publishable' }, async (request, cont
 
   const { data: photos, error: photosError } = await context.supabaseAdmin
     .from('gallery_photos')
-    .select('id, original_filename, storage_path, price_ars')
+    .select('id, original_filename, storage_path, price_ars, has_watermark, allow_download')
     .eq('gallery_id', gallery.id)
     .order('created_at', { ascending: true })
   if (photosError) return json({ error: 'No pudimos cargar las fotos.' }, 500)
@@ -216,13 +216,20 @@ const handleRequest = withSupabase({ auth: 'publishable' }, async (request, cont
       .createSignedUrl(photo.storage_path, 1800)
     if (error) return null
     const rawName = String(photo.original_filename ?? '')
-    const hasWatermark = !rawName.includes('[SIN_MARCA]')
-    const cleanFilename = rawName.replace(/^(\[(?:PORTADA|SIN_MARCA)\]\s*)+/i, '')
+    const photoRecord = photo as Record<string, unknown>
+    const hasWatermark = typeof photoRecord.has_watermark === 'boolean'
+      ? Boolean(photoRecord.has_watermark)
+      : !rawName.includes('[SIN_MARCA]')
+    const allowDownload = typeof photoRecord.allow_download === 'boolean'
+      ? Boolean(photoRecord.allow_download)
+      : rawName.includes('[DESCARGA]')
+    const cleanFilename = rawName.replace(/^(\[(?:PORTADA|SIN_MARCA|DESCARGA)\]\s*)+/i, '').trim()
     return {
       id: photo.id,
       filename: cleanFilename,
       priceArs: photo.price_ars,
       hasWatermark,
+      allowDownload,
       url: data.signedUrl,
     }
   }))
