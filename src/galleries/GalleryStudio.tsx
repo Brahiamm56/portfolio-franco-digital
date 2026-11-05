@@ -256,16 +256,12 @@ function GalleryPhotoManager({
   gallery,
   onSetCover,
   onToggleWatermark,
-  onSetAllWatermark,
   onToggleDownload,
-  onSetAllDownload,
 }: {
   gallery: PhotoGallery
   onSetCover: (photoId: string) => void
   onToggleWatermark: (photoId: string, enabled: boolean) => void
-  onSetAllWatermark: (enabled: boolean) => void
   onToggleDownload: (photoId: string, enabled: boolean) => void
-  onSetAllDownload: (enabled: boolean) => void
 }) {
   const defaultSelected = gallery.clientSelectedPhotoIds.filter((id) => gallery.photos.some((photo) => photo.id === id))
   const clientSelectionKey = defaultSelected.join('|')
@@ -279,7 +275,6 @@ function GalleryPhotoManager({
   const [error, setError] = useState('')
   const photosForDelivery = gallery.photos.filter((photo) => selected.includes(photo.id))
   const clientSelectionCount = defaultSelected.length
-  const watermarkedCount = gallery.photos.filter((p) => p.hasWatermark !== false).length
 
   const toggle = (photoId: string) => setSelected((current) => current.includes(photoId)
     ? current.filter((id) => id !== photoId)
@@ -706,9 +701,7 @@ function GalleryCard({
             gallery={gallery}
             onSetCover={onSetCover}
             onToggleWatermark={onToggleWatermark}
-            onSetAllWatermark={onSetAllWatermark}
             onToggleDownload={onToggleDownload}
-            onSetAllDownload={onSetAllDownload}
           />
         </div>
       )}
