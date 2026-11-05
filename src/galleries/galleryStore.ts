@@ -312,7 +312,7 @@ export async function listGalleries(): Promise<PhotoGallery[]> {
   let data: Array<Record<string, unknown>> | null = null
   const withCoverAndWmQuery = await supabase!
     .from('photo_galleries')
-    .select('id, title, client_name, event_date, status, share_token, client_selected_photo_ids, cover_photo_id, created_at, gallery_photos(id, original_filename, price_ars, storage_path, has_watermark, created_at)')
+    .select('id, title, client_name, event_date, status, share_token, client_selected_photo_ids, cover_photo_id, created_at, gallery_photos!gallery_photos_gallery_id_fkey(id, original_filename, price_ars, storage_path, has_watermark, created_at)')
     .order('created_at', { ascending: false })
 
   if (!withCoverAndWmQuery.error) {
@@ -320,7 +320,7 @@ export async function listGalleries(): Promise<PhotoGallery[]> {
   } else {
     const withCoverQuery = await supabase!
       .from('photo_galleries')
-      .select('id, title, client_name, event_date, status, share_token, client_selected_photo_ids, cover_photo_id, created_at, gallery_photos(id, original_filename, price_ars, storage_path, created_at)')
+      .select('id, title, client_name, event_date, status, share_token, client_selected_photo_ids, cover_photo_id, created_at, gallery_photos!gallery_photos_gallery_id_fkey(id, original_filename, price_ars, storage_path, created_at)')
       .order('created_at', { ascending: false })
 
     if (!withCoverQuery.error) {
@@ -328,21 +328,39 @@ export async function listGalleries(): Promise<PhotoGallery[]> {
     } else {
       const fallbackQuery = await supabase!
         .from('photo_galleries')
-        .select('id, title, client_name, event_date, status, share_token, client_selected_photo_ids, created_at, gallery_photos(id, original_filename, price_ars, storage_path, created_at)')
+        .select('id, title, client_name, event_date, status, share_token, client_selected_photo_ids, created_at, gallery_photos!gallery_photos_gallery_id_fkey(id, original_filename, price_ars, storage_path, created_at)')
         .order('created_at', { ascending: false })
-      if (fallbackQuery.error) throw fallbackQuery.error
-      data = fallbackQuery.data as unknown as Array<Record<string, unknown>>
+
+      if (!fallbackQuery.error) {
+        data = fallbackQuery.data as unknown as Array<Record<string, unknown>>
+      } else {
+        // Fallback final sin disambiguación explícita para esquemas antiguos
+        const legacyQuery = await supabase!
+          .from('photo_galleries')
+          .select('id, title, client_name, event_date, status, share_token, client_selected_photo_ids, created_at, gallery_photos(id, original_filename, price_ars, storage_path, created_at)')
+          .order('created_at', { ascending: false })
+        if (legacyQuery.error) throw fallbackQuery.error || legacyQuery.error
+        data = legacyQuery.data as unknown as Array<Record<string, unknown>>
+      }
     }
   }
 
   return Promise.all((data ?? []).map(async (row) => {
     const rawPhotos = (row.gallery_photos ?? []) as Array<Record<string, unknown>>
     const photos = await Promise.all(rawPhotos.map(async (photo) => {
-      const { data: signed, error: signedError } = await supabase!.storage
-        .from(STORAGE_BUCKET)
-        .createSignedUrl(String(photo.storage_path), 1800)
-      if (signedError) throw signedError
-      return mapRemotePhoto(photo, signed.signedUrl, String(row.id))
+      try {
+        const { data: signed, error: signedError } = await supabase!.storage
+          .from(STORAGE_BUCKET)
+          .createSignedUrl(String(photo.storage_path), 1800)
+        if (signedError || !signed) {
+          console.warn('Aviso al obtener enlace firmado:', signedError?.message)
+          return mapRemotePhoto(photo, '', String(row.id))
+        }
+        return mapRemotePhoto(photo, signed.signedUrl, String(row.id))
+      } catch (err) {
+        console.warn('Error al procesar foto:', err)
+        return mapRemotePhoto(photo, '', String(row.id))
+      }
     }))
     const localCover = typeof window !== 'undefined' ? localStorage.getItem(`gallery-cover-${row.id}`) : null
     const coverPhoto = resolveGalleryCoverPhoto(photos, (row.cover_photo_id as string) || localCover)
