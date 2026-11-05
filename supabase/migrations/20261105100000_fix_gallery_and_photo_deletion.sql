@@ -1,3 +1,7 @@
+-- Agregar columna cover_photo_id si no existe todavía (migración anterior puede no haberse aplicado)
+alter table public.photo_galleries
+  add column if not exists cover_photo_id uuid references public.gallery_photos(id) on delete set null;
+
 -- Permite la eliminación completa de galerías y sus fotos a los administradores autenticados.
 grant delete on public.photo_galleries to authenticated;
 grant delete on public.gallery_photos to authenticated;
