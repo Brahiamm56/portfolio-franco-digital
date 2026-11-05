@@ -221,7 +221,7 @@ export async function optimizeImageForWeb(
   }
 }
 
-function mapRemotePhoto(photo: Record<string, unknown>, url: string): GalleryPhoto {
+function mapRemotePhoto(photo: Record<string, unknown>, url: string, galleryId?: string): GalleryPhoto {
   const rawFilename = String(photo.original_filename ?? '')
   let hasWatermark = typeof photo.has_watermark === 'boolean'
     ? Boolean(photo.has_watermark)
@@ -239,6 +239,11 @@ function mapRemotePhoto(photo: Record<string, unknown>, url: string): GalleryPho
     const cached = localStorage.getItem(`gallery-photo-dl-${photo.id}`)
     if (cached !== null) {
       allowDownload = cached === '1'
+    } else if (galleryId) {
+      const allCached = localStorage.getItem(`gallery-dl-all-${galleryId}`)
+      if (allCached !== null) {
+        allowDownload = allCached === '1'
+      }
     }
   }
 
@@ -337,7 +342,7 @@ export async function listGalleries(): Promise<PhotoGallery[]> {
         .from(STORAGE_BUCKET)
         .createSignedUrl(String(photo.storage_path), 1800)
       if (signedError) throw signedError
-      return mapRemotePhoto(photo, signed.signedUrl)
+      return mapRemotePhoto(photo, signed.signedUrl, String(row.id))
     }))
     const localCover = typeof window !== 'undefined' ? localStorage.getItem(`gallery-cover-${row.id}`) : null
     const coverPhoto = resolveGalleryCoverPhoto(photos, (row.cover_photo_id as string) || localCover)
@@ -749,7 +754,20 @@ export function setPhotoDownload(photoId: string, allowDownload: boolean): void 
   }
 }
 
-export function setAllGalleryPhotosDownload(galleryId: string, allowDownload: boolean): void {
+export async function setAllGalleryPhotosDownload(
+  galleryId: string,
+  allowDownload: boolean,
+  photoIds?: string[]
+): Promise<void> {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(`gallery-dl-all-${galleryId}`, allowDownload ? '1' : '0')
+    if (photoIds && photoIds.length > 0) {
+      for (const id of photoIds) {
+        localStorage.setItem(`gallery-photo-dl-${id}`, allowDownload ? '1' : '0')
+      }
+    }
+  }
+
   if (!supabase && usingDemoGalleryStore) {
     const galleries = readLocalGalleries()
     const gallery = galleries.find((item) => item.id === galleryId)
@@ -764,9 +782,21 @@ export function setAllGalleryPhotosDownload(galleryId: string, allowDownload: bo
     }
     return
   }
-  // Para Supabase: persistir solo en localStorage (no hay columna en DB aún)
-  if (typeof window !== 'undefined') {
-    localStorage.setItem(`gallery-dl-all-${galleryId}`, allowDownload ? '1' : '0')
+
+  ensureSupabaseConfigured()
+  try {
+    const { data: photos } = await supabase!
+      .from('gallery_photos')
+      .select('id, original_filename')
+      .eq('gallery_id', galleryId)
+
+    if (photos && photos.length > 0 && typeof window !== 'undefined') {
+      for (const photo of photos) {
+        localStorage.setItem(`gallery-photo-dl-${photo.id}`, allowDownload ? '1' : '0')
+      }
+    }
+  } catch (err) {
+    console.warn('Error al actualizar permisos de descarga en lote:', err)
   }
 }
 
@@ -970,7 +1000,7 @@ export async function refreshGalleryPhotosForExport(galleryId: string): Promise<
       .from(STORAGE_BUCKET)
       .createSignedUrl(photo.storage_path, 3600)
     if (signedError) throw signedError
-    return mapRemotePhoto(photo, signed.signedUrl)
+    return mapRemotePhoto(photo, signed.signedUrl, galleryId)
   }))
 }
 

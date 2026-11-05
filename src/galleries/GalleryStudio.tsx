@@ -156,93 +156,6 @@ function WatermarkToggleControl({
   )
 }
 
-function DownloadToggleControl({
-  allowDownload,
-  onChange,
-  onApplyAll,
-  totalPhotos,
-  downloadableCount,
-}: {
-  allowDownload: boolean
-  onChange: (enabled: boolean) => void
-  onApplyAll?: (enabled: boolean) => void
-  totalPhotos?: number
-  downloadableCount?: number
-}) {
-  return (
-    <div className="gallery-watermark-panel gallery-download-panel">
-      <div className="gallery-watermark-panel__main">
-        <label className="gallery-watermark-checkbox">
-          <input
-            type="checkbox"
-            style={{ position: 'absolute', opacity: 0, pointerEvents: 'none' }}
-            checked={allowDownload}
-            onChange={(e) => onChange(e.target.checked)}
-          />
-          <span className="gallery-watermark-checkbox__box gallery-download-checkbox__box" aria-hidden="true">
-            {allowDownload ? '✓' : ''}
-          </span>
-          <span className="gallery-watermark-checkbox__label">
-            <strong>Descarga por cliente</strong>
-            <small>{allowDownload ? 'El cliente puede descargar las fotos directamente.' : 'Las fotos no se pueden descargar (solo ver).'}</small>
-          </span>
-        </label>
-
-        <div className="gallery-watermark-segmented" role="group" aria-label="Permiso de descarga">
-          <button
-            type="button"
-            className={`gallery-watermark-pill ${allowDownload ? 'is-active' : ''}`}
-            onClick={() => onChange(true)}
-          >
-            Descarga activada
-          </button>
-          <button
-            type="button"
-            className={`gallery-watermark-pill ${!allowDownload ? 'is-active' : ''}`}
-            onClick={() => onChange(false)}
-          >
-            Solo visualización
-          </button>
-        </div>
-      </div>
-
-      <div className="gallery-watermark-panel__sub">
-        <p className="gallery-watermark-panel__hint">
-          {allowDownload
-            ? 'Aparecerá un botón de descarga en cada foto. El cliente podrá guardarlas desde el navegador.'
-            : 'Las fotos no tendrán botón de descarga. El cliente solo puede verlas y elegirlas.'}
-        </p>
-
-        {typeof totalPhotos === 'number' && totalPhotos > 0 && onApplyAll && (
-          <div className="gallery-watermark-panel__batch">
-            {typeof downloadableCount === 'number' && (
-              <span className="gallery-watermark-panel__count">
-                {downloadableCount} de {totalPhotos} con descarga
-              </span>
-            )}
-            <div className="gallery-watermark-panel__batch-buttons">
-              <button
-                type="button"
-                className="gallery-watermark-mini-btn"
-                onClick={() => onApplyAll(true)}
-              >
-                Todas con descarga
-              </button>
-              <button
-                type="button"
-                className="gallery-watermark-mini-btn"
-                onClick={() => onApplyAll(false)}
-              >
-                Todas sin descarga
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
 function GalleryBrand({ light = false }: { light?: boolean }) {
   return (
     <a className={`gallery-brand ${light ? 'gallery-brand--light' : ''}`} href="/" aria-label="Franco Digital, volver al sitio">
@@ -257,8 +170,8 @@ function useAdminGalleries() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
-  const refresh = useCallback(async (initialLoad = false) => {
-    if (!initialLoad) {
+  const refresh = useCallback(async (showLoading = false) => {
+    if (showLoading) {
       setLoading(true)
       setError('')
     }
@@ -268,7 +181,9 @@ function useAdminGalleries() {
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'No pudimos cargar las galerías.')
     } finally {
-      setLoading(false)
+      if (showLoading) {
+        setLoading(false)
+      }
     }
   }, [])
 
@@ -387,110 +302,92 @@ function GalleryPhotoManager({
   }
 
   return (
-    <details className="gallery-photo-manager">
-      <summary>Elegir fotos y preparar entrega <span>{selected.length} elegidas</span></summary>
-      <div className="gallery-photo-manager__content">
-        <div className="gallery-photo-manager__heading">
-          <p>{clientSelectionCount ? `El cliente eligió ${clientSelectionCount} ${clientSelectionCount === 1 ? 'foto' : 'fotos'}.` : 'El cliente todavía no eligió fotos.'} Marcá las que querés incluir en el documento, definí la portada o cambiá qué fotos llevan marca de agua.</p>
-        </div>
-
-        <div className="gallery-photo-manager__wm-toolbar">
-          <div className="gallery-photo-manager__wm-toolbar-info">
-            <strong>Marca de agua:</strong>
-            <span>{watermarkedCount} de {gallery.photos.length} fotos con marca</span>
+    <div className="gallery-photo-manager">
+      <div className="gallery-photo-manager__heading">
+        <div className="gallery-photo-manager__header-row">
+          <div>
+            <strong>Fotos de este evento ({gallery.photos.length})</strong>
+            <p>
+              {clientSelectionCount ? `El cliente eligió ${clientSelectionCount} ${clientSelectionCount === 1 ? 'foto' : 'fotos'}. ` : ''}
+              Usá los botones debajo de cada foto para activar/quitar la marca de agua o permitir su descarga individual.
+            </p>
           </div>
-          <div className="gallery-photo-manager__wm-toolbar-actions">
-            <button
-              type="button"
-              className="gallery-watermark-mini-btn"
-              onClick={() => onSetAllWatermark(true)}
-              title="Poner marca de agua a todas las fotos de esta galería"
-            >
-              Activar en todas
-            </button>
-            <button
-              type="button"
-              className="gallery-watermark-mini-btn"
-              onClick={() => onSetAllWatermark(false)}
-              title="Quitar marca de agua de todas las fotos de esta galería"
-            >
-              Quitar de todas
-            </button>
-          </div>
+          {clientSelectionCount > 0 && (
+            <span className="gallery-photo-manager__client-tag">
+              ★ {clientSelectionCount} elegidas por cliente
+            </span>
+          )}
         </div>
+      </div>
 
-        <DownloadToggleControl
-          allowDownload={gallery.photos.some((p) => p.allowDownload === true)}
-          onChange={(enabled) => onSetAllDownload(enabled)}
-          onApplyAll={(enabled) => onSetAllDownload(enabled)}
-          totalPhotos={gallery.photos.length}
-          downloadableCount={gallery.photos.filter((p) => p.allowDownload === true).length}
-        />
-
-        <div className="gallery-photo-manager__grid">
-          {gallery.photos.map((photo, index) => {
-            const isSelected = selected.includes(photo.id)
-            const chosenByClient = defaultSelected.includes(photo.id)
-            const isCover = gallery.coverPhotoId === photo.id || (!gallery.coverPhotoId && index === 0)
-            const hasWatermark = photo.hasWatermark !== false
-            const allowDownload = photo.allowDownload === true
-            return (
-              <div key={photo.id} className="gallery-photo-manager__cell">
+      <div className="gallery-photo-manager__grid">
+        {gallery.photos.map((photo, index) => {
+          const isSelected = selected.includes(photo.id)
+          const chosenByClient = defaultSelected.includes(photo.id)
+          const isCover = gallery.coverPhotoId === photo.id || (!gallery.coverPhotoId && index === 0)
+          const hasWatermark = photo.hasWatermark !== false
+          const allowDownload = photo.allowDownload === true
+          return (
+            <div key={photo.id} className="gallery-photo-manager__cell">
+              <button
+                type="button"
+                className={`gallery-photo-manager__item ${isSelected ? 'is-selected' : ''}`}
+                onClick={() => toggle(photo.id)}
+                aria-pressed={isSelected}
+              >
+                <img src={photo.url} alt="" loading="lazy" />
+                <span className={`gallery-photo-manager__wm-tag ${hasWatermark ? 'is-wm' : 'is-clean'}`}>
+                  {hasWatermark ? 'MARCA' : 'SIN MARCA'}
+                </span>
+                {allowDownload && (
+                  <span className="gallery-photo-manager__dl-tag" title="Descarga habilitada">
+                    ↓
+                  </span>
+                )}
+                <span className="gallery-photo-manager__check">{isSelected ? '✓' : '+'}</span>
+                <span className="gallery-photo-manager__caption">
+                  {String(index + 1).padStart(2, '0')} · {cleanPhotoFilename(photo.filename)}
+                  {chosenByClient && <small>Elegida por cliente</small>}
+                </span>
+              </button>
+              <div className="gallery-photo-manager__cell-buttons">
                 <button
                   type="button"
-                  className={`gallery-photo-manager__item ${isSelected ? 'is-selected' : ''}`}
-                  onClick={() => toggle(photo.id)}
-                  aria-pressed={isSelected}
+                  className={`gallery-photo-manager__action-btn ${isCover ? 'is-active' : ''}`}
+                  title={isCover ? 'Foto de portada actual' : 'Fijar esta foto como portada del evento'}
+                  onClick={() => onSetCover(photo.id)}
                 >
-                  <img src={photo.url} alt="" loading="lazy" />
-                  <span className={`gallery-photo-manager__wm-tag ${hasWatermark ? 'is-wm' : 'is-clean'}`}>
-                    {hasWatermark ? 'MARCA' : 'SIN MARCA'}
-                  </span>
-                  {allowDownload && (
-                    <span className="gallery-photo-manager__dl-tag" title="Descarga habilitada">
-                      ↓
-                    </span>
-                  )}
-                  <span className="gallery-photo-manager__check">{isSelected ? '✓' : '+'}</span>
-                  <span className="gallery-photo-manager__caption">
-                    {String(index + 1).padStart(2, '0')} · {cleanPhotoFilename(photo.filename)}
-                    {chosenByClient && <small>Elegida por cliente</small>}
-                  </span>
+                  {isCover ? '★ Portada' : '☆ Portada'}
                 </button>
-                <div className="gallery-photo-manager__cell-buttons">
-                  <button
-                    type="button"
-                    className={`gallery-photo-manager__action-btn ${isCover ? 'is-active' : ''}`}
-                    title={isCover ? 'Foto de portada actual' : 'Fijar esta foto como portada del evento'}
-                    onClick={() => onSetCover(photo.id)}
-                  >
-                    {isCover ? '★ Portada' : '☆ Portada'}
-                  </button>
-                  <button
-                    type="button"
-                    className={`gallery-photo-manager__action-btn gallery-photo-manager__wm-btn ${hasWatermark ? 'is-wm-active' : 'is-wm-inactive'}`}
-                    title={hasWatermark ? 'Tiene marca de agua activa. Clic para quitarla.' : 'Sin marca de agua. Clic para activarla.'}
-                    onClick={() => onToggleWatermark(photo.id, !hasWatermark)}
-                  >
-                    {hasWatermark ? '✓ Marcada' : 'Sin marca'}
-                  </button>
-                  <button
-                    type="button"
-                    className={`gallery-photo-manager__action-btn gallery-photo-manager__dl-btn ${allowDownload ? 'is-dl-active' : 'is-dl-inactive'}`}
-                    title={allowDownload ? 'Descarga habilitada. Clic para deshabilitar.' : 'Descarga deshabilitada. Clic para habilitar.'}
-                    onClick={() => onToggleDownload(photo.id, !allowDownload)}
-                  >
-                    {allowDownload ? '↓ Descarga' : 'Sin descarga'}
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  className={`gallery-photo-manager__action-btn gallery-photo-manager__wm-btn ${hasWatermark ? 'is-wm-active' : 'is-wm-inactive'}`}
+                  title={hasWatermark ? 'Tiene marca de agua activa. Clic para quitarla.' : 'Sin marca de agua. Clic para activarla.'}
+                  onClick={() => onToggleWatermark(photo.id, !hasWatermark)}
+                >
+                  {hasWatermark ? '✓ Marcada' : 'Sin marca'}
+                </button>
+                <button
+                  type="button"
+                  className={`gallery-photo-manager__action-btn gallery-photo-manager__dl-btn ${allowDownload ? 'is-dl-active' : 'is-dl-inactive'}`}
+                  title={allowDownload ? 'Descarga habilitada. Clic para deshabilitar.' : 'Descarga deshabilitada. Clic para habilitar.'}
+                  onClick={() => onToggleDownload(photo.id, !allowDownload)}
+                >
+                  {allowDownload ? '↓ Descarga' : 'Sin descarga'}
+                </button>
               </div>
-            )
-          })}
-        </div>
-        {error && <p className="gallery-photo-manager__error" role="alert">{error}</p>}
-        <div className="gallery-photo-manager__footer"><span>{selected.length} {selected.length === 1 ? 'foto seleccionada' : 'fotos seleccionadas'}</span><button type="button" className="gallery-button gallery-button--small gallery-button--primary" disabled={busy || !selected.length} onClick={() => void generatePdf()}>{busy ? 'Generando PDF…' : 'Generar PDF'} <span>↓</span></button></div>
+            </div>
+          )
+        })}
       </div>
-    </details>
+      {error && <p className="gallery-photo-manager__error" role="alert">{error}</p>}
+      <div className="gallery-photo-manager__footer">
+        <span>{selected.length} {selected.length === 1 ? 'foto seleccionada' : 'fotos seleccionadas'}</span>
+        <button type="button" className="gallery-button gallery-button--small gallery-button--primary" disabled={busy || !selected.length} onClick={() => void generatePdf()}>
+          {busy ? 'Generando PDF…' : 'Generar PDF de entrega'} <span>↓</span>
+        </button>
+      </div>
+    </div>
   )
 }
 
@@ -820,7 +717,7 @@ function GalleryCard({
 }
 
 function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
-  const { galleries, loading, error, refresh, setError } = useAdminGalleries()
+  const { galleries, setGalleries, loading, error, refresh, setError } = useAdminGalleries()
   const [showCreate, setShowCreate] = useState(false)
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState('')
@@ -950,43 +847,53 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
   }
 
   const handleTogglePhotoWatermark = async (photoId: string, enabled: boolean) => {
-    setBusy(true)
-    setError('')
+    setGalleries((prev) => prev.map((g) => ({
+      ...g,
+      photos: g.photos.map((p) => p.id === photoId ? { ...p, hasWatermark: enabled } : p),
+    })))
+    setNotice(enabled ? 'Marca de agua activada en la foto.' : 'Marca de agua quitada de la foto.')
     try {
       await setPhotoWatermark(photoId, enabled)
-      await refresh()
-      setNotice(enabled ? 'Marca de agua activada en la foto.' : 'Marca de agua quitada de la foto.')
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'No pudimos actualizar la marca de agua.')
-    } finally {
-      setBusy(false)
+      void refresh(false)
     }
   }
 
   const handleSetAllWatermark = async (galleryId: string, enabled: boolean) => {
-    setBusy(true)
-    setError('')
+    setGalleries((prev) => prev.map((g) =>
+      g.id === galleryId
+        ? { ...g, photos: g.photos.map((p) => ({ ...p, hasWatermark: enabled })) }
+        : g
+    ))
+    setNotice(enabled ? 'Marca de agua activada en todas las fotos de la galería.' : 'Marca de agua quitada de todas las fotos de la galería.')
     try {
       await setAllGalleryPhotosWatermark(galleryId, enabled)
-      await refresh()
-      setNotice(enabled ? 'Marca de agua activada en todas las fotos de la galería.' : 'Marca de agua quitada de todas las fotos de la galería.')
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'No pudimos actualizar las fotos.')
-    } finally {
-      setBusy(false)
+      void refresh(false)
     }
   }
 
   const handleTogglePhotoDownload = (photoId: string, enabled: boolean) => {
-    setPhotoDownload(photoId, enabled)
-    void refresh()
+    setGalleries((prev) => prev.map((g) => ({
+      ...g,
+      photos: g.photos.map((p) => p.id === photoId ? { ...p, allowDownload: enabled } : p),
+    })))
     setNotice(enabled ? 'Descarga habilitada para esta foto.' : 'Descarga deshabilitada para esta foto.')
+    setPhotoDownload(photoId, enabled)
   }
 
   const handleSetAllDownload = (galleryId: string, enabled: boolean) => {
-    setAllGalleryPhotosDownload(galleryId, enabled)
-    void refresh()
-    setNotice(enabled ? 'Descarga habilitada en todas las fotos.' : 'Descarga deshabilitada en todas las fotos.')
+    const targetGallery = galleries.find((g) => g.id === galleryId)
+    const photoIds = targetGallery?.photos.map((p) => p.id) ?? []
+    setGalleries((prev) => prev.map((g) =>
+      g.id === galleryId
+        ? { ...g, photos: g.photos.map((p) => ({ ...p, allowDownload: enabled })) }
+        : g
+    ))
+    setNotice(enabled ? 'Descarga habilitada en todas las fotos de la galería.' : 'Descarga deshabilitada en todas las fotos de la galería.')
+    void setAllGalleryPhotosDownload(galleryId, enabled, photoIds)
   }
 
   const handleUploadCover = async (gallery: PhotoGallery, file: File) => {
