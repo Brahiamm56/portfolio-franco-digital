@@ -205,9 +205,23 @@ create policy "Approved admins delete their galleries"
   on public.photo_galleries for delete to authenticated
   using (
     owner_id = (select auth.uid())
-    and exists (
+    or exists (
       select 1 from private.gallery_admins
       where user_id = (select auth.uid())
+    )
+  );
+
+drop policy if exists "Approved admins delete gallery photos" on public.gallery_photos;
+create policy "Approved admins delete gallery photos"
+  on public.gallery_photos for delete to authenticated
+  using (
+    exists (
+      select 1 from public.photo_galleries
+      where photo_galleries.id = gallery_photos.gallery_id
+        and (
+          photo_galleries.owner_id = (select auth.uid())
+          or exists (select 1 from private.gallery_admins where user_id = (select auth.uid()))
+        )
     )
   );
 

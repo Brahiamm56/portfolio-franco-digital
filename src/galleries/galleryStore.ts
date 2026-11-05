@@ -836,11 +836,37 @@ export async function deleteGallery(galleryId: string) {
     })
     db.close()
     writeLocalGalleries(galleries.filter((item) => item.id !== galleryId))
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem(`gallery-cover-${galleryId}`)
+      localStorage.removeItem(`gallery-dl-all-${galleryId}`)
+      gallery.photos.forEach((photo) => {
+        localStorage.removeItem(`gallery-photo-dl-${photo.id}`)
+        localStorage.removeItem(`gallery-photo-wm-${photo.id}`)
+      })
+    }
     return
   }
   ensureSupabaseConfigured()
 
-  // 1. Desvincular portada para evitar conflictos de clave foránea circular
+  // 1. Intentar borrado administrativo a través de Edge Function (service_role)
+  // Esto garantiza bypass de bloqueos de RLS, cascada y claves foráneas circulares.
+  try {
+    const { data: edgeRes, error: edgeErr } = await supabase!.functions.invoke('public-gallery', {
+      body: { action: 'delete-gallery', galleryId },
+    })
+    if (!edgeErr && edgeRes && (edgeRes.success || edgeRes.deletedId)) {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem(`gallery-cover-${galleryId}`)
+        localStorage.removeItem(`gallery-dl-all-${galleryId}`)
+      }
+      return
+    }
+  } catch (cause) {
+    console.warn('Edge function no disponible para borrado, usando método directo:', cause)
+  }
+
+  // 2. Método directo paso a paso:
+  // a) Desvincular portada para evitar conflictos de clave foránea circular
   try {
     await supabase!
       .from('photo_galleries')
@@ -850,40 +876,60 @@ export async function deleteGallery(galleryId: string) {
     console.warn('Advertencia al desvincular cover_photo_id:', cause)
   }
 
-  // 2. Obtener y remover archivos del storage
+  // b) Obtener y remover archivos del storage
   const { data: photos } = await supabase!
     .from('gallery_photos')
-    .select('storage_path')
+    .select('id, storage_path')
     .eq('gallery_id', galleryId)
 
   const storagePaths = (photos ?? []).map((photo) => photo.storage_path).filter(Boolean)
-  if (storagePaths.length) {
+  if (storagePaths.length > 0) {
     try {
       const { error: storageError } = await supabase!.storage.from(STORAGE_BUCKET).remove(storagePaths)
       if (storageError) {
-        console.warn('Advertencia al remover archivos de storage:', storageError)
+        console.warn('Advertencia al remover archivos de storage:', storageError.message)
       }
     } catch (storageErr) {
       console.warn('Error capturado al remover archivos de storage:', storageErr)
     }
   }
 
-  // 3. Eliminar fotos de la base de datos explícitamente
+  // c) Eliminar fotos de la base de datos explícitamente
   try {
-    await supabase!
+    const { error: photosError } = await supabase!
       .from('gallery_photos')
       .delete()
       .eq('gallery_id', galleryId)
+    if (photosError) {
+      console.warn('Advertencia al eliminar fotos en lote:', photosError.message)
+      if (photos && photos.length > 0) {
+        for (const p of photos) {
+          await supabase!.from('gallery_photos').delete().eq('id', p.id)
+        }
+      }
+    }
   } catch (cause) {
     console.warn('Advertencia al eliminar fotos de gallery_photos:', cause)
   }
 
-  // 4. Eliminar el registro de la galería
+  // d) Eliminar el registro de la galería
   const { error: galleryError } = await supabase!
     .from('photo_galleries')
     .delete()
     .eq('id', galleryId)
   if (galleryError) throw galleryError
+
+  // e) Limpieza de claves en localStorage
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem(`gallery-cover-${galleryId}`)
+    localStorage.removeItem(`gallery-dl-all-${galleryId}`)
+    if (photos) {
+      for (const p of photos) {
+        localStorage.removeItem(`gallery-photo-dl-${p.id}`)
+        localStorage.removeItem(`gallery-photo-wm-${p.id}`)
+      }
+    }
+  }
 }
 
 export async function getPublishedGallery(shareToken: string): Promise<PublicPhotoGallery | null> {

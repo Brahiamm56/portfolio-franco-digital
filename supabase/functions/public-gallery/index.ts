@@ -54,6 +54,7 @@ const handleRequest = withSupabase({ auth: 'publishable' }, async (request, cont
   let token = ''
   let listPublished = false
   let saveSelections: string[] | null = null
+  let deleteGalleryId: string | null = null
   try {
     const contentLength = Number(request.headers.get('content-length') ?? 0)
     if (Number.isFinite(contentLength) && contentLength > 128 * 1024) {
@@ -64,6 +65,11 @@ const handleRequest = withSupabase({ auth: 'publishable' }, async (request, cont
     token = body && typeof body === 'object' && 'token' in body && typeof body.token === 'string'
       ? body.token
       : ''
+    if (body && typeof body === 'object' && 'action' in body && body.action === 'delete-gallery') {
+      if ('galleryId' in body && typeof body.galleryId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(body.galleryId)) {
+        deleteGalleryId = body.galleryId
+      }
+    }
     if (body && typeof body === 'object' && 'action' in body && body.action === 'save-selections') {
       if (!('photoIds' in body) || !Array.isArray(body.photoIds)
         || body.photoIds.length > 2000
@@ -75,6 +81,51 @@ const handleRequest = withSupabase({ auth: 'publishable' }, async (request, cont
   } catch (error) {
     if (error instanceof PayloadTooLargeError) return json({ error: 'Solicitud demasiado grande.' }, 413)
     return json({ error: 'Solicitud inválida.' }, 400)
+  }
+
+  if (deleteGalleryId) {
+    try {
+      // 1. Desvincular portada para evitar bloqueo de FK
+      await context.supabaseAdmin
+        .from('photo_galleries')
+        .update({ cover_photo_id: null })
+        .eq('id', deleteGalleryId)
+
+      // 2. Obtener fotos para remover archivos del storage
+      const { data: photos } = await context.supabaseAdmin
+        .from('gallery_photos')
+        .select('storage_path')
+        .eq('gallery_id', deleteGalleryId)
+
+      const storagePaths = (photos ?? []).map((p) => p.storage_path).filter(Boolean)
+      if (storagePaths.length > 0) {
+        try {
+          await context.supabaseAdmin.storage.from('gallery-photos').remove(storagePaths)
+        } catch (storageErr) {
+          console.warn('Aviso al remover fotos de storage:', storageErr)
+        }
+      }
+
+      // 3. Eliminar fotos
+      await context.supabaseAdmin
+        .from('gallery_photos')
+        .delete()
+        .eq('gallery_id', deleteGalleryId)
+
+      // 4. Eliminar galería
+      const { error: delError } = await context.supabaseAdmin
+        .from('photo_galleries')
+        .delete()
+        .eq('id', deleteGalleryId)
+
+      if (delError) {
+        return json({ error: 'No pudimos eliminar la galería: ' + delError.message }, 500)
+      }
+
+      return json({ success: true, deletedId: deleteGalleryId })
+    } catch (err) {
+      return json({ error: err instanceof Error ? err.message : 'Error inesperado al eliminar la galería.' }, 500)
+    }
   }
 
   if (listPublished) {

@@ -587,8 +587,8 @@ function GalleryCard({
       {/* ── Panel de configuración ── */}
       {configOpen && totalPhotos > 0 && (
         <div className="gallery-card__config-panel">
-          {/* Header del panel */}
-          <div className="gallery-card__config-header">
+          {/* Header sticky del panel con botón guardar */}
+          <div className="gallery-card__config-sticky-bar">
             <div className="gallery-card__config-title">
               <span className="gallery-card__config-icon">⚙</span>
               <div>
@@ -596,7 +596,10 @@ function GalleryCard({
                 <small>{totalPhotos} fotos · {gallery.title}</small>
               </div>
             </div>
-            <button type="button" className="gallery-card__config-close" onClick={() => setConfigOpen(false)} aria-label="Cerrar configuración">×</button>
+            <div className="gallery-card__config-sticky-actions">
+              <button type="button" className="gallery-button gallery-button--primary gallery-card__config-save" onClick={() => setConfigOpen(false)}>✓ Guardar configuración</button>
+              <button type="button" className="gallery-card__config-close" onClick={() => setConfigOpen(false)} aria-label="Cerrar configuración">×</button>
+            </div>
           </div>
 
           {/* Controles en grid compacto de 3 columnas */}
@@ -957,11 +960,15 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
     setBusy(true)
     setError('')
     setNotice('')
+    // Optimistic: quitar de la UI inmediatamente
+    const prevGalleries = galleries
+    setGalleries((prev) => prev.filter((g) => g.id !== gallery.id))
     try {
       await deleteGallery(gallery.id)
-      await refresh()
-      setNotice(`La galería “${gallery.title}” se eliminó por completo.`)
+      setNotice(`La galería "${gallery.title}" se eliminó por completo.`)
     } catch (cause) {
+      // Restaurar si falló
+      setGalleries(prevGalleries)
       setError(cause instanceof Error ? cause.message : 'No pudimos eliminar la galería.')
     } finally {
       setBusy(false)

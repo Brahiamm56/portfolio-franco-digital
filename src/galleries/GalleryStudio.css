@@ -1162,6 +1162,39 @@
   justify-content: space-between;
   gap: 1rem;
 }
+
+/* ── Barra sticky de configuración ── */
+.gallery-card__config-sticky-bar {
+  position: sticky;
+  top: 72px; /* altura del gallery-topbar */
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: .75rem 0 .85rem;
+  margin: -.25rem 0 .5rem;
+  background: rgba(14, 16, 18, 0.92);
+  backdrop-filter: blur(14px);
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.gallery-card__config-sticky-actions {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  flex-shrink: 0;
+}
+.gallery-card__config-save {
+  white-space: nowrap;
+  font-size: .75rem !important;
+  min-height: 36px !important;
+  padding: 0 1.2rem !important;
+  letter-spacing: .02em;
+}
+@media (max-width: 760px) {
+  .gallery-card__config-sticky-bar { top: 60px; }
+  .gallery-card__config-save { font-size: .68rem !important; padding: 0 .9rem !important; min-height: 32px !important; }
+}
 .gallery-card__config-title {
   display: flex;
   align-items: center;
