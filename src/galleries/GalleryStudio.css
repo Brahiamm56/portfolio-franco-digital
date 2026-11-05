@@ -1143,12 +1143,12 @@
 .gallery-card__config-panel {
   grid-column: 1 / -1;
   border-top: 1px solid rgba(255,255,255,0.08);
-  background: rgba(255,255,255,0.02);
+  background: rgba(14, 16, 18, 0.98);
   border-radius: 0 0 16px 16px;
-  padding: 1.5rem 2rem;
+  padding: 1.25rem 1.6rem 1.5rem;
   display: flex;
   flex-direction: column;
-  gap: 1.4rem;
+  gap: 1.1rem;
   animation: configSlideIn 200ms ease;
 }
 @keyframes configSlideIn {
@@ -1207,15 +1207,33 @@
   color: #ffffff;
 }
 
+/* Fila de controles en grid compacto */
+.gallery-card__config-controls-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 0.85rem;
+  align-items: stretch;
+}
+
 /* Secciones del panel */
 .gallery-card__config-section {
   display: flex;
   flex-direction: column;
-  gap: .7rem;
-  padding: 1.1rem 1.3rem;
-  background: rgba(255,255,255,0.025);
-  border: 1px solid rgba(255,255,255,0.07);
-  border-radius: 10px;
+  gap: 0.65rem;
+  padding: 0.95rem 1.15rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  min-height: 0;
+  height: auto;
+}
+
+.gallery-card__config-hint {
+  margin: 0;
+  color: #888d91;
+  font-size: 0.7rem;
+  line-height: 1.4;
+  flex: none;
 }
 .gallery-card__config-section-label {
   display: flex;
@@ -1300,8 +1318,8 @@
 /* ─── Galería de fotos dentro del panel de configuración ─── */
 .gallery-card__config-panel .gallery-photo-manager {
   border-top: 1px solid rgba(255, 255, 255, 0.08);
-  padding: 1.2rem 0 0;
-  margin-top: 0.5rem;
+  padding: 0.85rem 0 0;
+  margin-top: 0.2rem;
 }
 
 .gallery-photo-manager__header-row {

@@ -599,101 +599,104 @@ function GalleryCard({
             <button type="button" className="gallery-card__config-close" onClick={() => setConfigOpen(false)} aria-label="Cerrar configuración">×</button>
           </div>
 
-          {/* Sección: Compartir */}
-          <div className="gallery-card__config-section">
-            <div className="gallery-card__config-section-label">
-              <span className="gallery-card__config-section-icon">🔗</span>
-              <strong>Compartir</strong>
-            </div>
-            <div className="gallery-card__config-share-row">
-              <div className={`gallery-card__config-status-dot ${gallery.status === 'published' ? 'is-on' : 'is-off'}`} />
-              <span className="gallery-card__config-status-text">
-                {gallery.status === 'published' ? 'Galería publicada — el cliente puede acceder' : 'Galería en borrador — no es accesible'}
-              </span>
-            </div>
-            {gallery.status === 'published' && (
-              <div className="gallery-card__config-share-actions">
-                <code className="gallery-card__config-url">{shareUrl}</code>
-                <div className="gallery-card__config-share-btns">
-                  <button type="button" className="gallery-button gallery-button--small gallery-button--outline" onClick={onCopyLink}>
-                    Copiar link <span>↗</span>
-                  </button>
-                  <a className="gallery-button gallery-button--small gallery-button--quiet" href={shareUrl} target="_blank" rel="noreferrer">
-                    Abrir <span>↗</span>
-                  </a>
+          {/* Controles en grid compacto de 3 columnas */}
+          <div className="gallery-card__config-controls-grid">
+            {/* Sección: Compartir */}
+            <div className="gallery-card__config-section">
+              <div className="gallery-card__config-section-label">
+                <span className="gallery-card__config-section-icon">🔗</span>
+                <strong>Compartir</strong>
+              </div>
+              <div className="gallery-card__config-share-row">
+                <div className={`gallery-card__config-status-dot ${gallery.status === 'published' ? 'is-on' : 'is-off'}`} />
+                <span className="gallery-card__config-status-text">
+                  {gallery.status === 'published' ? 'Galería publicada' : 'En borrador (privada)'}
+                </span>
+              </div>
+              {gallery.status === 'published' && (
+                <div className="gallery-card__config-share-actions">
+                  <code className="gallery-card__config-url">{shareUrl}</code>
+                  <div className="gallery-card__config-share-btns">
+                    <button type="button" className="gallery-button gallery-button--small gallery-button--outline" onClick={onCopyLink}>
+                      Copiar link <span>↗</span>
+                    </button>
+                    <a className="gallery-button gallery-button--small gallery-button--quiet" href={shareUrl} target="_blank" rel="noreferrer">
+                      Abrir <span>↗</span>
+                    </a>
+                  </div>
                 </div>
-              </div>
-            )}
-            <button
-              type="button"
-              className={`gallery-button gallery-button--small ${gallery.status === 'published' ? 'gallery-button--quiet' : 'gallery-button--primary'}`}
-              disabled={busy}
-              onClick={onToggleStatus}
-            >
-              {gallery.status === 'published' ? 'Pausar link' : 'Publicar galería'}
-            </button>
-          </div>
-
-          {/* Sección: Marca de agua */}
-          <div className="gallery-card__config-section">
-            <div className="gallery-card__config-section-label">
-              <span className="gallery-card__config-section-icon">🔒</span>
-              <strong>Marca de agua</strong>
-              <span className="gallery-card__config-section-count">{watermarkedCount} / {totalPhotos}</span>
-            </div>
-            <div className="gallery-card__config-toggle-row">
-              <div className="gallery-watermark-segmented" role="group">
-                <button
-                  type="button"
-                  className={`gallery-watermark-pill ${watermarkedCount === totalPhotos ? 'is-active' : ''}`}
-                  onClick={() => onSetAllWatermark(true)}
-                >
-                  Todas con marca
-                </button>
-                <button
-                  type="button"
-                  className={`gallery-watermark-pill ${watermarkedCount === 0 ? 'is-active' : ''}`}
-                  onClick={() => onSetAllWatermark(false)}
-                >
-                  Todas sin marca
-                </button>
-              </div>
-              {watermarkedCount > 0 && watermarkedCount < totalPhotos && (
-                <span className="gallery-card__config-mixed">Mixto — {watermarkedCount} con marca, {totalPhotos - watermarkedCount} sin marca</span>
               )}
+              <button
+                type="button"
+                className={`gallery-button gallery-button--small ${gallery.status === 'published' ? 'gallery-button--quiet' : 'gallery-button--primary'}`}
+                disabled={busy}
+                onClick={onToggleStatus}
+              >
+                {gallery.status === 'published' ? 'Pausar link' : 'Publicar galería'}
+              </button>
             </div>
-            <p className="gallery-watermark-panel__hint">Configuración por foto disponible en "Elegir fotos y preparar entrega".</p>
-          </div>
 
-          {/* Sección: Descarga */}
-          <div className="gallery-card__config-section">
-            <div className="gallery-card__config-section-label">
-              <span className="gallery-card__config-section-icon">⬇</span>
-              <strong>Descarga por cliente</strong>
-              <span className="gallery-card__config-section-count">{downloadCount} / {totalPhotos}</span>
-            </div>
-            <div className="gallery-card__config-toggle-row">
-              <div className="gallery-watermark-segmented" role="group">
-                <button
-                  type="button"
-                  className={`gallery-watermark-pill ${downloadCount === totalPhotos ? 'is-active' : ''}`}
-                  onClick={() => onSetAllDownload(true)}
-                >
-                  Permitir descarga
-                </button>
-                <button
-                  type="button"
-                  className={`gallery-watermark-pill ${downloadCount === 0 ? 'is-active' : ''}`}
-                  onClick={() => onSetAllDownload(false)}
-                >
-                  Solo visualización
-                </button>
+            {/* Sección: Marca de agua */}
+            <div className="gallery-card__config-section">
+              <div className="gallery-card__config-section-label">
+                <span className="gallery-card__config-section-icon">🔒</span>
+                <strong>Marca de agua</strong>
+                <span className="gallery-card__config-section-count">{watermarkedCount} / {totalPhotos}</span>
               </div>
-              {downloadCount > 0 && downloadCount < totalPhotos && (
-                <span className="gallery-card__config-mixed">{downloadCount} fotos con descarga habilitada</span>
-              )}
+              <div className="gallery-card__config-toggle-row">
+                <div className="gallery-watermark-segmented" role="group">
+                  <button
+                    type="button"
+                    className={`gallery-watermark-pill ${watermarkedCount === totalPhotos ? 'is-active' : ''}`}
+                    onClick={() => onSetAllWatermark(true)}
+                  >
+                    Todas con marca
+                  </button>
+                  <button
+                    type="button"
+                    className={`gallery-watermark-pill ${watermarkedCount === 0 ? 'is-active' : ''}`}
+                    onClick={() => onSetAllWatermark(false)}
+                  >
+                    Todas sin marca
+                  </button>
+                </div>
+                {watermarkedCount > 0 && watermarkedCount < totalPhotos && (
+                  <span className="gallery-card__config-mixed">{watermarkedCount} con marca, {totalPhotos - watermarkedCount} sin marca</span>
+                )}
+              </div>
+              <p className="gallery-card__config-hint">Podés activar o quitar la marca foto por foto en la grilla inferior.</p>
             </div>
-            <p className="gallery-watermark-panel__hint">{downloadCount > 0 ? 'El cliente verá un botón para descargar las fotos habilitadas.' : 'Las fotos no se pueden descargar, solo ver y elegir.'}</p>
+
+            {/* Sección: Descarga */}
+            <div className="gallery-card__config-section">
+              <div className="gallery-card__config-section-label">
+                <span className="gallery-card__config-section-icon">⬇</span>
+                <strong>Descarga por cliente</strong>
+                <span className="gallery-card__config-section-count">{downloadCount} / {totalPhotos}</span>
+              </div>
+              <div className="gallery-card__config-toggle-row">
+                <div className="gallery-watermark-segmented" role="group">
+                  <button
+                    type="button"
+                    className={`gallery-watermark-pill ${downloadCount === totalPhotos ? 'is-active' : ''}`}
+                    onClick={() => onSetAllDownload(true)}
+                  >
+                    Permitir descarga
+                  </button>
+                  <button
+                    type="button"
+                    className={`gallery-watermark-pill ${downloadCount === 0 ? 'is-active' : ''}`}
+                    onClick={() => onSetAllDownload(false)}
+                  >
+                    Solo visualización
+                  </button>
+                </div>
+                {downloadCount > 0 && downloadCount < totalPhotos && (
+                  <span className="gallery-card__config-mixed">{downloadCount} fotos con descarga activa</span>
+                )}
+              </div>
+              <p className="gallery-card__config-hint">{downloadCount > 0 ? 'Los clientes podrán descargar las fotos habilitadas.' : 'Solo podrán ver las fotos sin botón de descarga.'}</p>
+            </div>
           </div>
 
           {/* Manager de fotos */}
