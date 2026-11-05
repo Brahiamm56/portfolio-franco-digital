@@ -21,7 +21,6 @@ import {
   setPhotoWatermark,
   setPhotoDownload,
   setAllGalleryPhotosDownload,
-  getGalleryDownloadSetting,
   uploadGalleryCoverPhoto,
   usingDemoGalleryStore,
   type PhotoGallery,
@@ -544,8 +543,284 @@ function AdminLogin({ onSignedIn }: { onSignedIn: () => void }) {
   )
 }
 
+function GalleryCard({
+  gallery,
+  index,
+  totalGalleries,
+  coverUrl,
+  watermarkedCount,
+  downloadCount,
+  busy,
+  onCopyLink,
+  onToggleStatus,
+  onUploadCover,
+  onAddPhotos,
+  onRemove,
+  validateFiles,
+  onSetCover,
+  onToggleWatermark,
+  onSetAllWatermark,
+  onToggleDownload,
+  onSetAllDownload,
+}: {
+  gallery: PhotoGallery
+  index: number
+  totalGalleries: number
+  coverUrl: string | undefined
+  watermarkedCount: number
+  downloadCount: number
+  busy: boolean
+  onCopyLink: () => void
+  onToggleStatus: () => void
+  onUploadCover: (file: File) => void
+  onAddPhotos: (files: File[]) => void
+  onRemove: () => void
+  validateFiles: (files: File[]) => boolean
+  onSetCover: (photoId: string) => void
+  onToggleWatermark: (photoId: string, enabled: boolean) => void
+  onSetAllWatermark: (enabled: boolean) => void
+  onToggleDownload: (photoId: string, enabled: boolean) => void
+  onSetAllDownload: (enabled: boolean) => void
+}) {
+  const [configOpen, setConfigOpen] = useState(false)
+  const totalPhotos = gallery.photos.length
+  const shareUrl = galleryShareUrl(gallery.shareToken)
+
+  return (
+    <article className="gallery-card">
+      {/* ── Portada ── */}
+      <div className="gallery-card__cover">
+        {coverUrl
+          ? <img src={coverUrl} alt={`Portada de ${gallery.title}`} />
+          : <div className="gallery-card__placeholder"><PhotoMark /><span>SIN FOTOS</span></div>
+        }
+        <span className={`gallery-status ${gallery.status === 'published' ? 'is-published' : ''}`}>
+          <i />{gallery.status === 'published' ? 'PUBLICADA' : 'BORRADOR'}
+        </span>
+        <span className="gallery-card__number">{String(totalGalleries - index).padStart(2, '0')}</span>
+        <span className="gallery-card__cover-pill">PORTADA</span>
+        <label className="gallery-card__cover-action" title="Cambiar foto de portada">
+          <span>📷 Cambiar portada</span>
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            disabled={busy}
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) onUploadCover(f); e.target.value = '' }}
+          />
+        </label>
+      </div>
+
+      {/* ── Cuerpo ── */}
+      <div className="gallery-card__body">
+        <div className="gallery-card__info">
+          <p>{gallery.clientName}{gallery.eventDate ? ` · ${new Date(`${gallery.eventDate}T12:00:00`).toLocaleDateString('es-AR')}` : ''}</p>
+          <h3>{gallery.title}</h3>
+          <div className="gallery-card__meta-row">
+            <span>{totalPhotos} {totalPhotos === 1 ? 'foto' : 'fotos'} · {gallery.photos[0] ? currency.format(gallery.photos[0].priceArs) : 'Precio sin definir'} c/u</span>
+            {totalPhotos > 0 && (
+              <div className="gallery-card__badges">
+                <span className={`gallery-card__badge ${watermarkedCount > 0 ? 'is-wm' : 'is-clean'}`} title={`${watermarkedCount} de ${totalPhotos} con marca de agua`}>
+                  {watermarkedCount > 0 ? `${watermarkedCount} con marca` : 'Sin marca'}
+                </span>
+                {downloadCount > 0 && (
+                  <span className="gallery-card__badge is-dl" title={`${downloadCount} fotos con descarga habilitada`}>
+                    {downloadCount} con descarga
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ── Acciones principales ── */}
+        <div className="gallery-card__actions">
+          {/* Publicar / Pausar */}
+          <button
+            type="button"
+            className={`gallery-button gallery-button--small ${gallery.status === 'published' ? 'gallery-button--quiet' : 'gallery-button--primary'}`}
+            disabled={busy}
+            onClick={onToggleStatus}
+          >
+            {gallery.status === 'published' ? 'Pausar link' : 'Publicar'}
+          </button>
+
+          {/* Copiar link */}
+          {gallery.status === 'published' && (
+            <button type="button" className="gallery-button gallery-button--small gallery-button--outline" onClick={onCopyLink}>
+              Copiar link <span>↗</span>
+            </button>
+          )}
+
+          {/* Agregar fotos */}
+          <label className="gallery-upload-more">
+            ＋<span>Agregar fotos</span>
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              multiple
+              onChange={(e) => {
+                const sel = Array.from(e.target.files ?? [])
+                if (sel.length && validateFiles(sel)) onAddPhotos(sel)
+                e.target.value = ''
+              }}
+            />
+          </label>
+
+          {/* Configurar */}
+          {totalPhotos > 0 && (
+            <button
+              type="button"
+              className={`gallery-button gallery-button--small gallery-card__config-btn ${configOpen ? 'is-active' : ''}`}
+              onClick={() => setConfigOpen((v) => !v)}
+              aria-expanded={configOpen}
+            >
+              <span>⚙</span> Configurar
+            </button>
+          )}
+
+          {/* Eliminar */}
+          <button type="button" className="gallery-button gallery-button--small gallery-button--danger" disabled={busy} onClick={onRemove}>
+            Eliminar
+          </button>
+        </div>
+
+        {/* Link de cliente */}
+        {gallery.status === 'published' && (
+          <a className="gallery-card__share" href={shareUrl} target="_blank" rel="noreferrer">
+            Abrir link de cliente <span>↗</span>
+          </a>
+        )}
+      </div>
+
+      {/* ── Panel de configuración ── */}
+      {configOpen && totalPhotos > 0 && (
+        <div className="gallery-card__config-panel">
+          {/* Header del panel */}
+          <div className="gallery-card__config-header">
+            <div className="gallery-card__config-title">
+              <span className="gallery-card__config-icon">⚙</span>
+              <div>
+                <strong>Configuración de la galería</strong>
+                <small>{totalPhotos} fotos · {gallery.title}</small>
+              </div>
+            </div>
+            <button type="button" className="gallery-card__config-close" onClick={() => setConfigOpen(false)} aria-label="Cerrar configuración">×</button>
+          </div>
+
+          {/* Sección: Compartir */}
+          <div className="gallery-card__config-section">
+            <div className="gallery-card__config-section-label">
+              <span className="gallery-card__config-section-icon">🔗</span>
+              <strong>Compartir</strong>
+            </div>
+            <div className="gallery-card__config-share-row">
+              <div className={`gallery-card__config-status-dot ${gallery.status === 'published' ? 'is-on' : 'is-off'}`} />
+              <span className="gallery-card__config-status-text">
+                {gallery.status === 'published' ? 'Galería publicada — el cliente puede acceder' : 'Galería en borrador — no es accesible'}
+              </span>
+            </div>
+            {gallery.status === 'published' && (
+              <div className="gallery-card__config-share-actions">
+                <code className="gallery-card__config-url">{shareUrl}</code>
+                <div className="gallery-card__config-share-btns">
+                  <button type="button" className="gallery-button gallery-button--small gallery-button--outline" onClick={onCopyLink}>
+                    Copiar link <span>↗</span>
+                  </button>
+                  <a className="gallery-button gallery-button--small gallery-button--quiet" href={shareUrl} target="_blank" rel="noreferrer">
+                    Abrir <span>↗</span>
+                  </a>
+                </div>
+              </div>
+            )}
+            <button
+              type="button"
+              className={`gallery-button gallery-button--small ${gallery.status === 'published' ? 'gallery-button--quiet' : 'gallery-button--primary'}`}
+              disabled={busy}
+              onClick={onToggleStatus}
+            >
+              {gallery.status === 'published' ? 'Pausar link' : 'Publicar galería'}
+            </button>
+          </div>
+
+          {/* Sección: Marca de agua */}
+          <div className="gallery-card__config-section">
+            <div className="gallery-card__config-section-label">
+              <span className="gallery-card__config-section-icon">🔒</span>
+              <strong>Marca de agua</strong>
+              <span className="gallery-card__config-section-count">{watermarkedCount} / {totalPhotos}</span>
+            </div>
+            <div className="gallery-card__config-toggle-row">
+              <div className="gallery-watermark-segmented" role="group">
+                <button
+                  type="button"
+                  className={`gallery-watermark-pill ${watermarkedCount === totalPhotos ? 'is-active' : ''}`}
+                  onClick={() => onSetAllWatermark(true)}
+                >
+                  Todas con marca
+                </button>
+                <button
+                  type="button"
+                  className={`gallery-watermark-pill ${watermarkedCount === 0 ? 'is-active' : ''}`}
+                  onClick={() => onSetAllWatermark(false)}
+                >
+                  Todas sin marca
+                </button>
+              </div>
+              {watermarkedCount > 0 && watermarkedCount < totalPhotos && (
+                <span className="gallery-card__config-mixed">Mixto — {watermarkedCount} con marca, {totalPhotos - watermarkedCount} sin marca</span>
+              )}
+            </div>
+            <p className="gallery-watermark-panel__hint">Configuración por foto disponible en "Elegir fotos y preparar entrega".</p>
+          </div>
+
+          {/* Sección: Descarga */}
+          <div className="gallery-card__config-section">
+            <div className="gallery-card__config-section-label">
+              <span className="gallery-card__config-section-icon">⬇</span>
+              <strong>Descarga por cliente</strong>
+              <span className="gallery-card__config-section-count">{downloadCount} / {totalPhotos}</span>
+            </div>
+            <div className="gallery-card__config-toggle-row">
+              <div className="gallery-watermark-segmented" role="group">
+                <button
+                  type="button"
+                  className={`gallery-watermark-pill ${downloadCount === totalPhotos ? 'is-active' : ''}`}
+                  onClick={() => onSetAllDownload(true)}
+                >
+                  Permitir descarga
+                </button>
+                <button
+                  type="button"
+                  className={`gallery-watermark-pill ${downloadCount === 0 ? 'is-active' : ''}`}
+                  onClick={() => onSetAllDownload(false)}
+                >
+                  Solo visualización
+                </button>
+              </div>
+              {downloadCount > 0 && downloadCount < totalPhotos && (
+                <span className="gallery-card__config-mixed">{downloadCount} fotos con descarga habilitada</span>
+              )}
+            </div>
+            <p className="gallery-watermark-panel__hint">{downloadCount > 0 ? 'El cliente verá un botón para descargar las fotos habilitadas.' : 'Las fotos no se pueden descargar, solo ver y elegir.'}</p>
+          </div>
+
+          {/* Manager de fotos */}
+          <GalleryPhotoManager
+            gallery={gallery}
+            onSetCover={onSetCover}
+            onToggleWatermark={onToggleWatermark}
+            onSetAllWatermark={onSetAllWatermark}
+            onToggleDownload={onToggleDownload}
+            onSetAllDownload={onSetAllDownload}
+          />
+        </div>
+      )}
+    </article>
+  )
+}
+
 function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
-  const { galleries, setGalleries, loading, error, refresh, setError } = useAdminGalleries()
+  const { galleries, loading, error, refresh, setError } = useAdminGalleries()
   const [showCreate, setShowCreate] = useState(false)
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState('')
@@ -815,65 +1090,35 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
             <div className="gallery-card-list">
               {galleries.map((gallery, index) => {
                 const coverUrl = gallery.coverPhotoUrl || gallery.photos[0]?.url
+                const watermarkedCount = gallery.photos.filter((p) => p.hasWatermark !== false).length
+                const downloadCount = gallery.photos.filter((p) => p.allowDownload === true).length
                 return (
-                  <article className="gallery-card" key={gallery.id}>
-                    <div className="gallery-card__cover">
-                      {coverUrl ? <img src={coverUrl} alt={`Portada de ${gallery.title}`} /> : <div className="gallery-card__placeholder"><PhotoMark /><span>SIN FOTOS</span></div>}
-                      <span className={`gallery-status ${gallery.status === 'published' ? 'is-published' : ''}`}><i />{gallery.status === 'published' ? 'PUBLICADA' : 'BORRADOR'}</span>
-                      <span className="gallery-card__number">{String(galleries.length - index).padStart(2, '0')}</span>
-                      <span className="gallery-card__cover-pill">PORTADA</span>
-                      <label className="gallery-card__cover-action" title="Cambiar foto de portada">
-                        <span>📷 Cambiar portada</span>
-                        <input
-                          type="file"
-                          accept="image/jpeg,image/png,image/webp"
-                          disabled={busy}
-                          onChange={(event) => {
-                            const file = event.target.files?.[0]
-                            if (file) void handleUploadCover(gallery, file)
-                            event.target.value = ''
-                          }}
-                        />
-                      </label>
-                    </div>
-                    <div className="gallery-card__body">
-                      <div className="gallery-card__info"><p>{gallery.clientName}{gallery.eventDate ? ` · ${new Date(`${gallery.eventDate}T12:00:00`).toLocaleDateString('es-AR')}` : ''}</p><h3>{gallery.title}</h3><span>{gallery.photos.length} {gallery.photos.length === 1 ? 'foto' : 'fotos'} · {gallery.photos[0] ? currency.format(gallery.photos[0].priceArs) : 'Precio sin definir'} c/u</span></div>
-                      <div className="gallery-card__actions">
-                        {gallery.status === 'published' && <button type="button" className="gallery-button gallery-button--small gallery-button--outline" onClick={() => void copyLink(gallery)}>Copiar link <span>↗</span></button>}
-                        <button type="button" className={`gallery-button gallery-button--small ${gallery.status === 'published' ? 'gallery-button--quiet' : 'gallery-button--primary'}`} disabled={busy} onClick={() => void toggleStatus(gallery)}>{gallery.status === 'published' ? 'Pausar link' : 'Publicar'}</button>
-                        <label className="gallery-upload-more">
-                          ＋<span>Agregar fotos</span>
-                          <input
-                            type="file"
-                            accept="image/jpeg,image/png,image/webp"
-                            multiple
-                            onChange={(event) => {
-                              const selected = Array.from(event.target.files ?? [])
-                              if (selected.length && validateFiles(selected)) {
-                                setAddingToGallery(gallery)
-                                setAddFiles(selected)
-                                setAddFileWatermarks(selected.map(() => true))
-                                setAddMasterWatermark(true)
-                              }
-                              event.target.value = ''
-                            }}
-                          />
-                        </label>
-                        <button type="button" className="gallery-button gallery-button--small gallery-button--danger" disabled={busy} onClick={() => void removeGallery(gallery)}>Eliminar galería</button>
-                      </div>
-                      {gallery.status === 'published' && <a className="gallery-card__share" href={galleryShareUrl(gallery.shareToken)} target="_blank" rel="noreferrer">Abrir link de cliente <span>↗</span></a>}
-                    </div>
-                    {gallery.photos.length > 0 && (
-                      <GalleryPhotoManager
-                        gallery={gallery}
-                        onSetCover={(photoId) => void handleSetCoverPhoto(gallery, photoId)}
-                        onToggleWatermark={(photoId, enabled) => void handleTogglePhotoWatermark(photoId, enabled)}
-                        onSetAllWatermark={(enabled) => void handleSetAllWatermark(gallery.id, enabled)}
-                        onToggleDownload={(photoId, enabled) => handleTogglePhotoDownload(photoId, enabled)}
-                        onSetAllDownload={(enabled) => handleSetAllDownload(gallery.id, enabled)}
-                      />
-                    )}
-                  </article>
+                  <GalleryCard
+                    key={gallery.id}
+                    gallery={gallery}
+                    index={index}
+                    totalGalleries={galleries.length}
+                    coverUrl={coverUrl}
+                    watermarkedCount={watermarkedCount}
+                    downloadCount={downloadCount}
+                    busy={busy}
+                    onCopyLink={() => void copyLink(gallery)}
+                    onToggleStatus={() => void toggleStatus(gallery)}
+                    onUploadCover={(file) => void handleUploadCover(gallery, file)}
+                    onAddPhotos={(selected) => {
+                      setAddingToGallery(gallery)
+                      setAddFiles(selected)
+                      setAddFileWatermarks(selected.map(() => true))
+                      setAddMasterWatermark(true)
+                    }}
+                    onRemove={() => void removeGallery(gallery)}
+                    validateFiles={validateFiles}
+                    onSetCover={(photoId) => void handleSetCoverPhoto(gallery, photoId)}
+                    onToggleWatermark={(photoId, enabled) => void handleTogglePhotoWatermark(photoId, enabled)}
+                    onSetAllWatermark={(enabled) => void handleSetAllWatermark(gallery.id, enabled)}
+                    onToggleDownload={(photoId, enabled) => handleTogglePhotoDownload(photoId, enabled)}
+                    onSetAllDownload={(enabled) => handleSetAllDownload(gallery.id, enabled)}
+                  />
                 )
               })}
             </div>
