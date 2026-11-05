@@ -20,6 +20,7 @@ export type Database = {
           original_filename: string
           price_ars: number
           storage_path: string
+          has_watermark: boolean
         }
         Insert: {
           created_at?: string
@@ -28,6 +29,7 @@ export type Database = {
           original_filename: string
           price_ars?: number
           storage_path: string
+          has_watermark?: boolean
         }
         Update: {
           created_at?: string
@@ -36,6 +38,7 @@ export type Database = {
           original_filename?: string
           price_ars?: number
           storage_path?: string
+          has_watermark?: boolean
         }
         Relationships: [
           {

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { RiDownloadLine } from 'react-icons/ri'
 import loginBackground from '../assets/projects/hercules/01.webp'
 import francoLogo from '../assets/franco-digital-logo.png'
 import francoPortrait from '../assets/franco-acuna-portrait.jpg'
@@ -18,6 +19,9 @@ import {
   setGalleryCoverPhoto,
   setGalleryStatus,
   setPhotoWatermark,
+  setPhotoDownload,
+  setAllGalleryPhotosDownload,
+  getGalleryDownloadSetting,
   uploadGalleryCoverPhoto,
   usingDemoGalleryStore,
   type PhotoGallery,
@@ -153,6 +157,93 @@ function WatermarkToggleControl({
   )
 }
 
+function DownloadToggleControl({
+  allowDownload,
+  onChange,
+  onApplyAll,
+  totalPhotos,
+  downloadableCount,
+}: {
+  allowDownload: boolean
+  onChange: (enabled: boolean) => void
+  onApplyAll?: (enabled: boolean) => void
+  totalPhotos?: number
+  downloadableCount?: number
+}) {
+  return (
+    <div className="gallery-watermark-panel gallery-download-panel">
+      <div className="gallery-watermark-panel__main">
+        <label className="gallery-watermark-checkbox">
+          <input
+            type="checkbox"
+            style={{ position: 'absolute', opacity: 0, pointerEvents: 'none' }}
+            checked={allowDownload}
+            onChange={(e) => onChange(e.target.checked)}
+          />
+          <span className="gallery-watermark-checkbox__box gallery-download-checkbox__box" aria-hidden="true">
+            {allowDownload ? '✓' : ''}
+          </span>
+          <span className="gallery-watermark-checkbox__label">
+            <strong>Descarga por cliente</strong>
+            <small>{allowDownload ? 'El cliente puede descargar las fotos directamente.' : 'Las fotos no se pueden descargar (solo ver).'}</small>
+          </span>
+        </label>
+
+        <div className="gallery-watermark-segmented" role="group" aria-label="Permiso de descarga">
+          <button
+            type="button"
+            className={`gallery-watermark-pill ${allowDownload ? 'is-active' : ''}`}
+            onClick={() => onChange(true)}
+          >
+            Descarga activada
+          </button>
+          <button
+            type="button"
+            className={`gallery-watermark-pill ${!allowDownload ? 'is-active' : ''}`}
+            onClick={() => onChange(false)}
+          >
+            Solo visualización
+          </button>
+        </div>
+      </div>
+
+      <div className="gallery-watermark-panel__sub">
+        <p className="gallery-watermark-panel__hint">
+          {allowDownload
+            ? 'Aparecerá un botón de descarga en cada foto. El cliente podrá guardarlas desde el navegador.'
+            : 'Las fotos no tendrán botón de descarga. El cliente solo puede verlas y elegirlas.'}
+        </p>
+
+        {typeof totalPhotos === 'number' && totalPhotos > 0 && onApplyAll && (
+          <div className="gallery-watermark-panel__batch">
+            {typeof downloadableCount === 'number' && (
+              <span className="gallery-watermark-panel__count">
+                {downloadableCount} de {totalPhotos} con descarga
+              </span>
+            )}
+            <div className="gallery-watermark-panel__batch-buttons">
+              <button
+                type="button"
+                className="gallery-watermark-mini-btn"
+                onClick={() => onApplyAll(true)}
+              >
+                Todas con descarga
+              </button>
+              <button
+                type="button"
+                className="gallery-watermark-mini-btn"
+                onClick={() => onApplyAll(false)}
+              >
+                Todas sin descarga
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function GalleryBrand({ light = false }: { light?: boolean }) {
   return (
     <a className={`gallery-brand ${light ? 'gallery-brand--light' : ''}`} href="/" aria-label="Franco Digital, volver al sitio">
@@ -186,7 +277,7 @@ function useAdminGalleries() {
     const timer = window.setTimeout(() => { void refresh(true) }, 0)
     return () => window.clearTimeout(timer)
   }, [refresh])
-  return { galleries, loading, error, refresh, setError }
+  return { galleries, setGalleries, loading, error, refresh, setError }
 }
 
 async function buildGalleryPdf(gallery: PhotoGallery, photos: GalleryPhoto[]) {
@@ -252,11 +343,15 @@ function GalleryPhotoManager({
   onSetCover,
   onToggleWatermark,
   onSetAllWatermark,
+  onToggleDownload,
+  onSetAllDownload,
 }: {
   gallery: PhotoGallery
   onSetCover: (photoId: string) => void
   onToggleWatermark: (photoId: string, enabled: boolean) => void
   onSetAllWatermark: (enabled: boolean) => void
+  onToggleDownload: (photoId: string, enabled: boolean) => void
+  onSetAllDownload: (enabled: boolean) => void
 }) {
   const defaultSelected = gallery.clientSelectedPhotoIds.filter((id) => gallery.photos.some((photo) => photo.id === id))
   const clientSelectionKey = defaultSelected.join('|')
@@ -302,7 +397,7 @@ function GalleryPhotoManager({
 
         <div className="gallery-photo-manager__wm-toolbar">
           <div className="gallery-photo-manager__wm-toolbar-info">
-            <strong>💧 Marca de agua:</strong>
+            <strong>Marca de agua:</strong>
             <span>{watermarkedCount} de {gallery.photos.length} fotos con marca</span>
           </div>
           <div className="gallery-photo-manager__wm-toolbar-actions">
@@ -325,12 +420,21 @@ function GalleryPhotoManager({
           </div>
         </div>
 
+        <DownloadToggleControl
+          allowDownload={gallery.photos.some((p) => p.allowDownload === true)}
+          onChange={(enabled) => onSetAllDownload(enabled)}
+          onApplyAll={(enabled) => onSetAllDownload(enabled)}
+          totalPhotos={gallery.photos.length}
+          downloadableCount={gallery.photos.filter((p) => p.allowDownload === true).length}
+        />
+
         <div className="gallery-photo-manager__grid">
           {gallery.photos.map((photo, index) => {
             const isSelected = selected.includes(photo.id)
             const chosenByClient = defaultSelected.includes(photo.id)
             const isCover = gallery.coverPhotoId === photo.id || (!gallery.coverPhotoId && index === 0)
             const hasWatermark = photo.hasWatermark !== false
+            const allowDownload = photo.allowDownload === true
             return (
               <div key={photo.id} className="gallery-photo-manager__cell">
                 <button
@@ -343,6 +447,11 @@ function GalleryPhotoManager({
                   <span className={`gallery-photo-manager__wm-tag ${hasWatermark ? 'is-wm' : 'is-clean'}`}>
                     {hasWatermark ? 'MARCA' : 'SIN MARCA'}
                   </span>
+                  {allowDownload && (
+                    <span className="gallery-photo-manager__dl-tag" title="Descarga habilitada">
+                      ↓
+                    </span>
+                  )}
                   <span className="gallery-photo-manager__check">{isSelected ? '✓' : '+'}</span>
                   <span className="gallery-photo-manager__caption">
                     {String(index + 1).padStart(2, '0')} · {cleanPhotoFilename(photo.filename)}
@@ -365,6 +474,14 @@ function GalleryPhotoManager({
                     onClick={() => onToggleWatermark(photo.id, !hasWatermark)}
                   >
                     {hasWatermark ? '✓ Marcada' : 'Sin marca'}
+                  </button>
+                  <button
+                    type="button"
+                    className={`gallery-photo-manager__action-btn gallery-photo-manager__dl-btn ${allowDownload ? 'is-dl-active' : 'is-dl-inactive'}`}
+                    title={allowDownload ? 'Descarga habilitada. Clic para deshabilitar.' : 'Descarga deshabilitada. Clic para habilitar.'}
+                    onClick={() => onToggleDownload(photo.id, !allowDownload)}
+                  >
+                    {allowDownload ? '↓ Descarga' : 'Sin descarga'}
                   </button>
                 </div>
               </div>
@@ -428,7 +545,7 @@ function AdminLogin({ onSignedIn }: { onSignedIn: () => void }) {
 }
 
 function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
-  const { galleries, loading, error, refresh, setError } = useAdminGalleries()
+  const { galleries, setGalleries, loading, error, refresh, setError } = useAdminGalleries()
   const [showCreate, setShowCreate] = useState(false)
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState('')
@@ -583,6 +700,18 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
     } finally {
       setBusy(false)
     }
+  }
+
+  const handleTogglePhotoDownload = (photoId: string, enabled: boolean) => {
+    setPhotoDownload(photoId, enabled)
+    void refresh()
+    setNotice(enabled ? 'Descarga habilitada para esta foto.' : 'Descarga deshabilitada para esta foto.')
+  }
+
+  const handleSetAllDownload = (galleryId: string, enabled: boolean) => {
+    setAllGalleryPhotosDownload(galleryId, enabled)
+    void refresh()
+    setNotice(enabled ? 'Descarga habilitada en todas las fotos.' : 'Descarga deshabilitada en todas las fotos.')
   }
 
   const handleUploadCover = async (gallery: PhotoGallery, file: File) => {
@@ -740,6 +869,8 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
                         onSetCover={(photoId) => void handleSetCoverPhoto(gallery, photoId)}
                         onToggleWatermark={(photoId, enabled) => void handleTogglePhotoWatermark(photoId, enabled)}
                         onSetAllWatermark={(enabled) => void handleSetAllWatermark(gallery.id, enabled)}
+                        onToggleDownload={(photoId, enabled) => handleTogglePhotoDownload(photoId, enabled)}
+                        onSetAllDownload={(enabled) => handleSetAllDownload(gallery.id, enabled)}
                       />
                     )}
                   </article>
@@ -981,6 +1112,24 @@ function PublicPhotoItem({
   const [loaded, setLoaded] = useState(false)
   const [hasError, setHasError] = useState(false)
 
+  const handleDownload = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    try {
+      const response = await fetch(photo.url)
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = cleanPhotoFilename(photo.filename) || `foto-${index + 1}.jpg`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch {
+      window.open(photo.url, '_blank')
+    }
+  }
+
   return (
     <article className={`gallery-client__photo ${isSelected ? 'is-selected' : ''} ${loaded ? 'is-loaded' : 'is-loading'}`}>
       <button
@@ -1021,6 +1170,17 @@ function PublicPhotoItem({
       >
         {isSelected ? '✓' : '+'}
       </button>
+      {photo.allowDownload && (
+        <button
+          type="button"
+          className="gallery-client__download-btn"
+          onClick={handleDownload}
+          aria-label={`Descargar foto ${index + 1}`}
+          title="Descargar foto"
+        >
+          <RiDownloadLine />
+        </button>
+      )}
       <span className="gallery-client__photo-price">
         {photo.priceArs ? currency.format(photo.priceArs) : 'Sin cargo'}
       </span>
@@ -1410,15 +1570,45 @@ function PublicGallery({ token }: { token: string }) {
                 </div>
                 <div className="gallery-lightbox__caption">
                   <span>{String(previewIndex + 1).padStart(2, '0')} / {String(gallery.photos.length).padStart(2, '0')} · {cleanPhotoFilename(gallery.photos[previewIndex].filename)}</span>
-                  <button
-                    type="button"
-                    className="gallery-lightbox__select-button"
-                    aria-pressed={selected.includes(gallery.photos[previewIndex].id)}
-                    onClick={() => togglePhoto(gallery.photos[previewIndex].id)}
-                  >
-                    <ReiconCart className="gallery-lightbox__select-icon" />
-                    <span>{selected.includes(gallery.photos[previewIndex].id) ? '✓ Elegida' : '+ Elegir foto'}</span>
-                  </button>
+                  <div className="gallery-lightbox__caption-actions">
+                    <button
+                      type="button"
+                      className="gallery-lightbox__select-button"
+                      aria-pressed={selected.includes(gallery.photos[previewIndex].id)}
+                      onClick={() => togglePhoto(gallery.photos[previewIndex].id)}
+                    >
+                      <ReiconCart className="gallery-lightbox__select-icon" />
+                      <span>{selected.includes(gallery.photos[previewIndex].id) ? '✓ Elegida' : '+ Elegir foto'}</span>
+                    </button>
+                    {gallery.photos[previewIndex].allowDownload && (
+                      <button
+                        type="button"
+                        className="gallery-lightbox__download-btn"
+                        aria-label="Descargar foto"
+                        title="Descargar foto"
+                        onClick={async () => {
+                          const currentPhoto = gallery.photos[previewIndex]
+                          try {
+                            const response = await fetch(currentPhoto.url)
+                            const blob = await response.blob()
+                            const url = URL.createObjectURL(blob)
+                            const a = document.createElement('a')
+                            a.href = url
+                            a.download = cleanPhotoFilename(currentPhoto.filename) || `foto-${previewIndex + 1}.jpg`
+                            document.body.appendChild(a)
+                            a.click()
+                            document.body.removeChild(a)
+                            URL.revokeObjectURL(url)
+                          } catch {
+                            window.open(currentPhoto.url, '_blank')
+                          }
+                        }}
+                      >
+                        <RiDownloadLine />
+                        <span>Descargar</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
                 {gallery.photos.length > 1 && (
                   <button className="gallery-lightbox__nav gallery-lightbox__nav--next" type="button" onClick={() => navigatePreview(1)} aria-label="Foto siguiente">›</button>

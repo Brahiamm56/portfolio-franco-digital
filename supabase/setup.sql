@@ -75,8 +75,12 @@ create table if not exists public.gallery_photos (
     storage_path ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}[.](jpg|jpeg|png|webp)$'
   ),
   price_ars integer not null default 0 check (price_ars >= 0),
+  has_watermark boolean not null default true,
   created_at timestamptz not null default now()
 );
+
+alter table public.gallery_photos
+  add column if not exists has_watermark boolean not null default true;
 
 create index if not exists photo_galleries_owner_created_at_idx
   on public.photo_galleries(owner_id, created_at desc);
@@ -145,8 +149,10 @@ grant insert (owner_id, title, client_name, event_date, status, share_token, cov
   on public.photo_galleries to authenticated;
 grant update (status, cover_photo_id) on public.photo_galleries to authenticated;
 grant delete on public.photo_galleries to authenticated;
-grant insert (gallery_id, original_filename, storage_path, price_ars)
+grant insert (gallery_id, original_filename, storage_path, price_ars, has_watermark)
   on public.gallery_photos to authenticated;
+grant update (original_filename, has_watermark) on public.gallery_photos to authenticated;
+grant delete on public.gallery_photos to authenticated;
 
 drop policy if exists "Approved admins can view their own approval" on private.gallery_admins;
 create policy "Approved admins can view their own approval"
@@ -226,6 +232,28 @@ create policy "Approved admins add gallery photos"
         and photo_galleries.owner_id = (select auth.uid())
     )
   );
+
+drop policy if exists "Approved admins update gallery photos" on public.gallery_photos;
+create policy "Approved admins update gallery photos"
+  on public.gallery_photos for update to authenticated
+  using (exists (
+    select 1 from public.photo_galleries
+    where photo_galleries.id = gallery_photos.gallery_id
+      and photo_galleries.owner_id = (select auth.uid())
+      and exists (
+        select 1 from private.gallery_admins
+        where user_id = (select auth.uid())
+      )
+  ))
+  with check (exists (
+    select 1 from public.photo_galleries
+    where photo_galleries.id = gallery_photos.gallery_id
+      and photo_galleries.owner_id = (select auth.uid())
+      and exists (
+        select 1 from private.gallery_admins
+        where user_id = (select auth.uid())
+      )
+  ));
 
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values ('gallery-photos', 'gallery-photos', false, 6291456, array['image/jpeg', 'image/png', 'image/webp'])

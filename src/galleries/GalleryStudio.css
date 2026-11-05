@@ -955,4 +955,120 @@
   border: 1px solid rgba(255, 255, 255, 0.14);
 }
 
+/* ─── Tag de descarga habilitada en el manager (admin) ─── */
+.gallery-photo-manager__dl-tag {
+  position: absolute;
+  top: .35rem;
+  right: .35rem;
+  z-index: 2;
+  width: 1.4rem;
+  height: 1.4rem;
+  display: grid;
+  place-items: center;
+  border-radius: 4px;
+  font-size: .7rem;
+  font-weight: 700;
+  background: rgba(34, 197, 94, 0.2);
+  color: #4ade80;
+  border: 1px solid rgba(74, 222, 128, 0.35);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+/* ─── Botón de descarga por foto (manager admin) ─── */
+.gallery-photo-manager__dl-btn {
+  grid-column: span 2;
+}
+.gallery-photo-manager__dl-btn.is-dl-active {
+  background: rgba(34, 197, 94, 0.14);
+  border-color: rgba(74, 222, 128, 0.4);
+  color: #4ade80;
+}
+.gallery-photo-manager__dl-btn.is-dl-inactive {
+  background: rgba(255, 255, 255, 0.025);
+  border-color: rgba(255, 255, 255, 0.1);
+  color: #6f7377;
+}
+
+/* ─── Panel de descarga (admin) ─── */
+.gallery-download-panel {
+  margin-top: .75rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  padding-top: .75rem;
+}
+.gallery-download-checkbox__box {
+  background: rgba(34, 197, 94, 0.15) !important;
+  border-color: rgba(74, 222, 128, 0.4) !important;
+  color: #4ade80 !important;
+}
+
+/* ─── Botón de descarga en la grilla de cliente ─── */
+.gallery-client__download-btn {
+  position: absolute;
+  bottom: .45rem;
+  right: .45rem;
+  z-index: 3;
+  width: 2rem;
+  height: 2rem;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  border: none;
+  outline: none;
+  cursor: pointer;
+  background: rgba(10, 12, 15, 0.78);
+  color: #ffffff;
+  font-size: 1rem;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255,255,255,0.1) inset;
+  transition: background 150ms ease, transform 150ms ease, box-shadow 150ms ease;
+}
+.gallery-client__download-btn:hover {
+  background: rgba(242, 22, 50, 0.9);
+  transform: scale(1.08);
+  box-shadow: 0 3px 12px rgba(242, 22, 50, 0.4), 0 0 0 1px rgba(255,255,255,0.15) inset;
+}
+.gallery-client__download-btn svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+/* ─── Botón de descarga en el lightbox ─── */
+.gallery-lightbox__caption-actions {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  flex-wrap: wrap;
+}
+.gallery-lightbox__download-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.07);
+  color: #ffffff;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: .78rem;
+  font-weight: 600;
+  padding: .45rem .85rem;
+  cursor: pointer;
+  transition: background 150ms ease, border-color 150ms ease;
+  white-space: nowrap;
+}
+.gallery-lightbox__download-btn:hover {
+  background: rgba(242, 22, 50, 0.85);
+  border-color: transparent;
+}
+.gallery-lightbox__download-btn svg {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+}
+
+/* Ajuste de grid de botones admin para el nuevo botón de descarga */
+.gallery-photo-manager__cell-buttons {
+  grid-template-columns: 1fr 1fr;
+}
 

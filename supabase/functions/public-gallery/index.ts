@@ -164,10 +164,14 @@ const handleRequest = withSupabase({ auth: 'publishable' }, async (request, cont
       .from('gallery-photos')
       .createSignedUrl(photo.storage_path, 1800)
     if (error) return null
+    const rawName = String(photo.original_filename ?? '')
+    const hasWatermark = !rawName.includes('[SIN_MARCA]')
+    const cleanFilename = rawName.replace(/^(\[(?:PORTADA|SIN_MARCA)\]\s*)+/i, '')
     return {
       id: photo.id,
-      filename: photo.original_filename,
+      filename: cleanFilename,
       priceArs: photo.price_ars,
+      hasWatermark,
       url: data.signedUrl,
     }
   }))

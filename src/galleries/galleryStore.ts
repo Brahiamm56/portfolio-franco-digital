@@ -19,6 +19,24 @@ export type GalleryPhoto = {
   priceArs: number
   url: string
   storagePath: string
+  hasWatermark?: boolean
+  allowDownload?: boolean
+}
+
+export function isPhotoWatermarkEnabled(photo: {
+  filename?: string
+  original_filename?: string
+  hasWatermark?: boolean
+  has_watermark?: boolean
+}): boolean {
+  if (typeof photo.hasWatermark === 'boolean') return photo.hasWatermark
+  if (typeof photo.has_watermark === 'boolean') return photo.has_watermark
+  const name = photo.filename ?? photo.original_filename ?? ''
+  return !name.includes('[SIN_MARCA]')
+}
+
+export function cleanPhotoFilename(name: string): string {
+  return name.replace(/^(\[(?:PORTADA|SIN_MARCA|DESCARGA)\]\s*)+/gi, '').trim()
 }
 
 export type PhotoGallery = {
@@ -204,12 +222,34 @@ export async function optimizeImageForWeb(
 }
 
 function mapRemotePhoto(photo: Record<string, unknown>, url: string): GalleryPhoto {
+  const rawFilename = String(photo.original_filename ?? '')
+  let hasWatermark = typeof photo.has_watermark === 'boolean'
+    ? Boolean(photo.has_watermark)
+    : !rawFilename.includes('[SIN_MARCA]')
+
+  if (typeof window !== 'undefined') {
+    const cached = localStorage.getItem(`gallery-photo-wm-${photo.id}`)
+    if (cached !== null) {
+      hasWatermark = cached === '1'
+    }
+  }
+
+  let allowDownload = rawFilename.includes('[DESCARGA]')
+  if (typeof window !== 'undefined') {
+    const cached = localStorage.getItem(`gallery-photo-dl-${photo.id}`)
+    if (cached !== null) {
+      allowDownload = cached === '1'
+    }
+  }
+
   return {
     id: String(photo.id),
-    filename: String(photo.original_filename),
+    filename: rawFilename,
     priceArs: Number(photo.price_ars),
     url,
     storagePath: String(photo.storage_path),
+    hasWatermark,
+    allowDownload,
   }
 }
 
@@ -231,7 +271,26 @@ export async function listGalleries(): Promise<PhotoGallery[]> {
     return Promise.all(readLocalGalleries().map(async (gallery) => {
       const photos = await Promise.all(gallery.photos.map(async (photo) => {
         const asset = await getDemoAsset(photo.id)
-        return { ...photo, url: asset ? URL.createObjectURL(asset) : '' }
+        let hasWatermark = typeof photo.hasWatermark === 'boolean'
+          ? photo.hasWatermark
+          : !photo.filename.includes('[SIN_MARCA]')
+        if (typeof window !== 'undefined') {
+          const cached = localStorage.getItem(`gallery-photo-wm-${photo.id}`)
+          if (cached !== null) {
+            hasWatermark = cached === '1'
+          }
+        }
+        let allowDownload = photo.filename.includes('[DESCARGA]')
+        if (typeof window !== 'undefined') {
+          const dlCached = localStorage.getItem(`gallery-photo-dl-${photo.id}`)
+          if (dlCached !== null) allowDownload = dlCached === '1'
+        }
+        return {
+          ...photo,
+          hasWatermark,
+          allowDownload,
+          url: asset ? URL.createObjectURL(asset) : '',
+        }
       }))
       const coverPhoto = resolveGalleryCoverPhoto(photos, gallery.coverPhotoId)
       return {
@@ -246,20 +305,29 @@ export async function listGalleries(): Promise<PhotoGallery[]> {
   ensureSupabaseConfigured()
 
   let data: Array<Record<string, unknown>> | null = null
-  const withCoverQuery = await supabase!
+  const withCoverAndWmQuery = await supabase!
     .from('photo_galleries')
-    .select('id, title, client_name, event_date, status, share_token, client_selected_photo_ids, cover_photo_id, created_at, gallery_photos(id, original_filename, price_ars, storage_path, created_at)')
+    .select('id, title, client_name, event_date, status, share_token, client_selected_photo_ids, cover_photo_id, created_at, gallery_photos(id, original_filename, price_ars, storage_path, has_watermark, created_at)')
     .order('created_at', { ascending: false })
 
-  if (!withCoverQuery.error) {
-    data = withCoverQuery.data as unknown as Array<Record<string, unknown>>
+  if (!withCoverAndWmQuery.error) {
+    data = withCoverAndWmQuery.data as unknown as Array<Record<string, unknown>>
   } else {
-    const fallbackQuery = await supabase!
+    const withCoverQuery = await supabase!
       .from('photo_galleries')
-      .select('id, title, client_name, event_date, status, share_token, client_selected_photo_ids, created_at, gallery_photos(id, original_filename, price_ars, storage_path, created_at)')
+      .select('id, title, client_name, event_date, status, share_token, client_selected_photo_ids, cover_photo_id, created_at, gallery_photos(id, original_filename, price_ars, storage_path, created_at)')
       .order('created_at', { ascending: false })
-    if (fallbackQuery.error) throw fallbackQuery.error
-    data = fallbackQuery.data as unknown as Array<Record<string, unknown>>
+
+    if (!withCoverQuery.error) {
+      data = withCoverQuery.data as unknown as Array<Record<string, unknown>>
+    } else {
+      const fallbackQuery = await supabase!
+        .from('photo_galleries')
+        .select('id, title, client_name, event_date, status, share_token, client_selected_photo_ids, created_at, gallery_photos(id, original_filename, price_ars, storage_path, created_at)')
+        .order('created_at', { ascending: false })
+      if (fallbackQuery.error) throw fallbackQuery.error
+      data = fallbackQuery.data as unknown as Array<Record<string, unknown>>
+    }
   }
 
   return Promise.all((data ?? []).map(async (row) => {
@@ -442,7 +510,12 @@ export async function uploadGalleryCoverPhoto(galleryId: string, file: File) {
   return photoId
 }
 
-export async function addGalleryPhotos(galleryId: string, files: File[], priceArs: number) {
+export async function addGalleryPhotos(
+  galleryId: string,
+  files: File[],
+  priceArs: number,
+  watermarks?: boolean[] | boolean
+) {
   if (!Number.isInteger(priceArs) || priceArs < 0 || priceArs > 2_147_483_647) {
     throw new Error('El precio debe ser un importe entero válido en pesos.')
   }
@@ -463,11 +536,18 @@ export async function addGalleryPhotos(galleryId: string, files: File[], priceAr
     const gallery = galleries.find((item) => item.id === galleryId)
     if (!gallery) throw new Error('No encontramos esta galería.')
     const additions: LocalGallery['photos'] = []
-    for (const file of files) {
+    for (const [index, file] of files.entries()) {
       const optimized = await optimizeImageForWeb(file)
       const id = crypto.randomUUID()
       await putDemoAsset(id, optimized)
-      additions.push({ id, filename: optimized.name, priceArs, storagePath: id })
+      const hasWatermark = Array.isArray(watermarks)
+        ? (watermarks[index] ?? true)
+        : (typeof watermarks === 'boolean' ? watermarks : true)
+      const filename = hasWatermark ? optimized.name : `[SIN_MARCA] ${optimized.name}`
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(`gallery-photo-wm-${id}`, hasWatermark ? '1' : '0')
+      }
+      additions.push({ id, filename, priceArs, storagePath: id, hasWatermark })
     }
     gallery.photos.push(...additions)
     writeLocalGalleries(galleries)
@@ -477,7 +557,7 @@ export async function addGalleryPhotos(galleryId: string, files: File[], priceAr
 
   const { data: userResult, error: userError } = await supabase!.auth.getUser()
   if (userError || !userResult.user) throw userError ?? new Error('Iniciá sesión para subir fotos.')
-  for (const file of files) {
+  for (const [index, file] of files.entries()) {
     const optimized = await optimizeImageForWeb(file)
     const extension = photoExtensions[optimized.type] ?? 'jpg'
     const storagePath = `${userResult.user.id}/${galleryId}/${crypto.randomUUID()}.${extension}`
@@ -488,17 +568,212 @@ export async function addGalleryPhotos(galleryId: string, files: File[], priceAr
     })
     if (uploadError) throw uploadError
 
-    const { error: insertError } = await supabase!.from('gallery_photos').insert({
+    const hasWatermark = Array.isArray(watermarks)
+      ? (watermarks[index] ?? true)
+      : (typeof watermarks === 'boolean' ? watermarks : true)
+    const originalFilename = hasWatermark ? optimized.name : `[SIN_MARCA] ${optimized.name}`
+
+    const insertPayload: Record<string, unknown> = {
       gallery_id: galleryId,
-      original_filename: optimized.name,
+      original_filename: originalFilename,
       storage_path: storagePath,
       price_ars: priceArs,
-    })
+      has_watermark: hasWatermark,
+    }
+
+    let { data: inserted, error: insertError } = await supabase!
+      .from('gallery_photos')
+      .insert(insertPayload as never)
+      .select('id')
+      .single()
+
+    if (insertError && insertError.message?.includes('has_watermark')) {
+      delete insertPayload.has_watermark
+      const retry = await supabase!
+        .from('gallery_photos')
+        .insert(insertPayload as never)
+        .select('id')
+        .single()
+      insertError = retry.error
+      inserted = retry.data
+    }
+
     if (insertError) {
       await supabase!.storage.from(STORAGE_BUCKET).remove([storagePath])
       throw insertError
     }
+
+    if (inserted?.id && typeof window !== 'undefined') {
+      localStorage.setItem(`gallery-photo-wm-${inserted.id}`, hasWatermark ? '1' : '0')
+    }
   }
+}
+
+export async function setPhotoWatermark(photoId: string, hasWatermark: boolean): Promise<void> {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(`gallery-photo-wm-${photoId}`, hasWatermark ? '1' : '0')
+  }
+
+  if (!supabase && usingDemoGalleryStore) {
+    const galleries = readLocalGalleries()
+    for (const gallery of galleries) {
+      const photo = gallery.photos.find((p) => p.id === photoId)
+      if (photo) {
+        photo.hasWatermark = hasWatermark
+        const clean = cleanPhotoFilename(photo.filename)
+        const isCover = photo.filename.startsWith('[PORTADA]')
+        const prefix = isCover ? '[PORTADA] ' : ''
+        photo.filename = hasWatermark ? `${prefix}${clean}` : `${prefix}[SIN_MARCA] ${clean}`
+        writeLocalGalleries(galleries)
+        return
+      }
+    }
+    return
+  }
+
+  ensureSupabaseConfigured()
+  try {
+    const { data: photo } = await supabase!
+      .from('gallery_photos')
+      .select('original_filename')
+      .eq('id', photoId)
+      .maybeSingle()
+
+    if (photo) {
+      const clean = cleanPhotoFilename(photo.original_filename)
+      const isCover = photo.original_filename.startsWith('[PORTADA]')
+      const prefix = isCover ? '[PORTADA] ' : ''
+      const newFilename = hasWatermark ? `${prefix}${clean}` : `${prefix}[SIN_MARCA] ${clean}`
+
+      const updatePayload: Record<string, unknown> = {
+        original_filename: newFilename,
+        has_watermark: hasWatermark,
+      }
+      const { error } = await supabase!
+        .from('gallery_photos')
+        .update(updatePayload as never)
+        .eq('id', photoId)
+
+      if (error && error.message?.includes('has_watermark')) {
+        delete updatePayload.has_watermark
+        await supabase!
+          .from('gallery_photos')
+          .update(updatePayload as never)
+          .eq('id', photoId)
+      }
+    }
+  } catch (err) {
+    console.warn('Error al actualizar marca de agua:', err)
+  }
+}
+
+export async function setAllGalleryPhotosWatermark(galleryId: string, hasWatermark: boolean): Promise<void> {
+  if (!supabase && usingDemoGalleryStore) {
+    const galleries = readLocalGalleries()
+    const gallery = galleries.find((item) => item.id === galleryId)
+    if (gallery) {
+      for (const photo of gallery.photos) {
+        photo.hasWatermark = hasWatermark
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(`gallery-photo-wm-${photo.id}`, hasWatermark ? '1' : '0')
+        }
+        const clean = cleanPhotoFilename(photo.filename)
+        const isCover = photo.filename.startsWith('[PORTADA]')
+        const prefix = isCover ? '[PORTADA] ' : ''
+        photo.filename = hasWatermark ? `${prefix}${clean}` : `${prefix}[SIN_MARCA] ${clean}`
+      }
+      writeLocalGalleries(galleries)
+    }
+    return
+  }
+
+  ensureSupabaseConfigured()
+  try {
+    const { data: photos } = await supabase!
+      .from('gallery_photos')
+      .select('id, original_filename')
+      .eq('gallery_id', galleryId)
+
+    if (photos && photos.length > 0) {
+      for (const photo of photos) {
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(`gallery-photo-wm-${photo.id}`, hasWatermark ? '1' : '0')
+        }
+        const clean = cleanPhotoFilename(photo.original_filename)
+        const isCover = photo.original_filename.startsWith('[PORTADA]')
+        const prefix = isCover ? '[PORTADA] ' : ''
+        const newFilename = hasWatermark ? `${prefix}${clean}` : `${prefix}[SIN_MARCA] ${clean}`
+
+        const updatePayload: Record<string, unknown> = {
+          original_filename: newFilename,
+          has_watermark: hasWatermark,
+        }
+        const { error } = await supabase!
+          .from('gallery_photos')
+          .update(updatePayload as never)
+          .eq('id', photo.id)
+
+        if (error && error.message?.includes('has_watermark')) {
+          delete updatePayload.has_watermark
+          await supabase!
+            .from('gallery_photos')
+            .update(updatePayload as never)
+            .eq('id', photo.id)
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Error al actualizar marcas de agua en lote:', err)
+  }
+}
+
+export function setPhotoDownload(photoId: string, allowDownload: boolean): void {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(`gallery-photo-dl-${photoId}`, allowDownload ? '1' : '0')
+  }
+  if (!supabase && usingDemoGalleryStore) {
+    const galleries = readLocalGalleries()
+    for (const gallery of galleries) {
+      const photo = gallery.photos.find((p) => p.id === photoId)
+      if (photo) {
+        photo.allowDownload = allowDownload
+        const clean = cleanPhotoFilename(photo.filename)
+        const isCover = photo.filename.startsWith('[PORTADA]')
+        const hasWm = photo.hasWatermark !== false && !photo.filename.includes('[SIN_MARCA]')
+        const prefix = [isCover ? '[PORTADA]' : '', !hasWm ? '[SIN_MARCA]' : '', allowDownload ? '[DESCARGA]' : ''].filter(Boolean).join(' ')
+        photo.filename = prefix ? `${prefix} ${clean}` : clean
+        writeLocalGalleries(galleries)
+        return
+      }
+    }
+  }
+}
+
+export function setAllGalleryPhotosDownload(galleryId: string, allowDownload: boolean): void {
+  if (!supabase && usingDemoGalleryStore) {
+    const galleries = readLocalGalleries()
+    const gallery = galleries.find((item) => item.id === galleryId)
+    if (gallery) {
+      for (const photo of gallery.photos) {
+        photo.allowDownload = allowDownload
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(`gallery-photo-dl-${photo.id}`, allowDownload ? '1' : '0')
+        }
+      }
+      writeLocalGalleries(galleries)
+    }
+    return
+  }
+  // Para Supabase: persistir solo en localStorage (no hay columna en DB aún)
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(`gallery-dl-all-${galleryId}`, allowDownload ? '1' : '0')
+  }
+}
+
+export function getGalleryDownloadSetting(galleryId: string): boolean {
+  if (typeof window === 'undefined') return false
+  const val = localStorage.getItem(`gallery-dl-all-${galleryId}`)
+  return val === '1'
 }
 
 export async function setGalleryStatus(galleryId: string, status: GalleryStatus) {
@@ -587,10 +862,30 @@ export async function getPublishedGallery(shareToken: string): Promise<PublicPho
     if (!gallery) return null
     const photos = await Promise.all(gallery.photos.map(async (photo) => {
       const asset = await getDemoAsset(photo.id)
+      let hasWatermark = typeof photo.hasWatermark === 'boolean'
+        ? photo.hasWatermark
+        : !photo.filename.includes('[SIN_MARCA]')
+      if (typeof window !== 'undefined') {
+        const cached = localStorage.getItem(`gallery-photo-wm-${photo.id}`)
+        if (cached !== null) {
+          hasWatermark = cached === '1'
+        }
+      }
+      let allowDownload = photo.filename.includes('[DESCARGA]')
+      if (typeof window !== 'undefined') {
+        const dlCached = localStorage.getItem(`gallery-photo-dl-${photo.id}`)
+        if (dlCached !== null) allowDownload = dlCached === '1'
+        else {
+          const galleryAll = localStorage.getItem(`gallery-dl-all-${gallery.id}`)
+          if (galleryAll !== null) allowDownload = galleryAll === '1'
+        }
+      }
       return {
         id: photo.id,
-        filename: photo.filename.replace(/^\[PORTADA\]\s*/i, ''),
+        filename: cleanPhotoFilename(photo.filename),
         priceArs: photo.priceArs,
+        hasWatermark,
+        allowDownload,
         url: asset ? URL.createObjectURL(asset) : '',
       }
     }))
@@ -613,11 +908,36 @@ export async function getPublishedGallery(shareToken: string): Promise<PublicPho
   const rawGallery = data?.gallery
   if (!rawGallery) return null
 
-  const rawPhotos = (rawGallery.photos ?? []) as Array<{ id: string; filename: string; priceArs: number; url: string }>
-  const photos = rawPhotos.map((p) => ({
-    ...p,
-    filename: String(p.filename ?? '').replace(/^\[PORTADA\]\s*/i, ''),
-  }))
+  const rawPhotos = (rawGallery.photos ?? []) as Array<{ id: string; filename: string; priceArs: number; url: string; hasWatermark?: boolean; allowDownload?: boolean }>
+  const photos = rawPhotos.map((p) => {
+    const rawName = String(p.filename ?? '')
+    let hasWatermark = typeof p.hasWatermark === 'boolean'
+      ? p.hasWatermark
+      : !rawName.includes('[SIN_MARCA]')
+    if (typeof window !== 'undefined') {
+      const cached = localStorage.getItem(`gallery-photo-wm-${p.id}`)
+      if (cached !== null) {
+        hasWatermark = cached === '1'
+      }
+    }
+    let allowDownload = typeof p.allowDownload === 'boolean'
+      ? p.allowDownload
+      : rawName.includes('[DESCARGA]')
+    if (typeof window !== 'undefined') {
+      const dlCached = localStorage.getItem(`gallery-photo-dl-${p.id}`)
+      if (dlCached !== null) allowDownload = dlCached === '1'
+      else {
+        const galleryAll = localStorage.getItem(`gallery-dl-all-${rawGallery.id}`)
+        if (galleryAll !== null) allowDownload = galleryAll === '1'
+      }
+    }
+    return {
+      ...p,
+      hasWatermark,
+      allowDownload,
+      filename: cleanPhotoFilename(rawName),
+    }
+  })
 
   const localCover = typeof window !== 'undefined' ? localStorage.getItem(`gallery-cover-${rawGallery.id}`) : null
   const coverPhoto = resolveGalleryCoverPhoto(photos, (rawGallery.coverPhotoId as string) || localCover)
