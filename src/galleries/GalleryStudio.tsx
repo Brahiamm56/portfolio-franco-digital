@@ -364,7 +364,7 @@ function GalleryPhotoManager({
                     title={hasWatermark ? 'Tiene marca de agua activa. Clic para quitarla.' : 'Sin marca de agua. Clic para activarla.'}
                     onClick={() => onToggleWatermark(photo.id, !hasWatermark)}
                   >
-                    {hasWatermark ? 'Con marca' : 'Sin marca'}
+                    {hasWatermark ? '✓ Marcada' : 'Sin marca'}
                   </button>
                 </div>
               </div>
@@ -850,7 +850,7 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
                     })
                   }}
                 >
-                  {hasWatermark ? 'Con marca' : 'Sin marca'}
+                  {hasWatermark ? '✓ Marcada' : 'Sin marca'}
                 </button>
                 <figcaption title={file.name}>{file.name}</figcaption>
               </figure>
@@ -939,7 +939,7 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
                           })
                         }}
                       >
-                        {hasWatermark ? 'Con marca' : 'Sin marca'}
+                        {hasWatermark ? '✓ Marcada' : 'Sin marca'}
                       </button>
                       <figcaption title={file.name}>{file.name}</figcaption>
                     </figure>

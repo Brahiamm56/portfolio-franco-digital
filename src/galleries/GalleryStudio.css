@@ -817,9 +817,10 @@
 }
 
 .gallery-upload-preview__wm-pill.is-on {
-  background: rgba(255, 255, 255, 0.92);
-  color: #0a0c0e;
-  box-shadow: 0 1px 8px rgba(0, 0, 0, 0.55);
+  background: rgba(242, 22, 50, 0.9);
+  color: #ffffff;
+  box-shadow: 0 1px 8px rgba(242, 22, 50, 0.45), 0 0 0 1px rgba(255,255,255,0.12) inset;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
 }
 
 .gallery-upload-preview__wm-pill.is-off {
