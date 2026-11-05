@@ -613,3 +613,345 @@
 .gallery-admin .gallery-notice button,
 .gallery-admin .gallery-error button { display: grid; width: 2rem; height: 2rem; place-items: center; border: 1px solid currentColor; border-radius: 50%; }
 
+/* Panel de control de Marca de Agua (Estilo Lightroom) */
+.gallery-watermark-panel {
+  margin: 1.1rem 0;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 16px;
+  padding: .95rem 1.15rem;
+  background: #14171a;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  display: flex;
+  flex-direction: column;
+  gap: .75rem;
+}
+
+.gallery-watermark-panel__main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.gallery-watermark-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: .8rem;
+  cursor: pointer;
+  user-select: none;
+  margin: 0 !important;
+}
+
+.gallery-watermark-checkbox input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.gallery-watermark-checkbox__box {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  border: 1.5px solid rgba(255, 255, 255, 0.4);
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.04);
+  color: #ffffff;
+  font-size: .82rem;
+  font-weight: 700;
+  line-height: 1;
+  transition: all 180ms ease;
+}
+
+.gallery-watermark-checkbox input[type="checkbox"]:checked + .gallery-watermark-checkbox__box {
+  background: var(--gallery-red);
+  border-color: var(--gallery-red);
+  box-shadow: 0 0 12px rgba(242, 22, 50, 0.45);
+}
+
+.gallery-watermark-checkbox__label {
+  display: flex;
+  flex-direction: column;
+  gap: .15rem;
+}
+
+.gallery-watermark-checkbox__label strong {
+  color: #f4f3ef;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: .88rem;
+  font-weight: 700;
+  letter-spacing: -.01em;
+}
+
+.gallery-watermark-checkbox__label small {
+  color: #8f9294;
+  font-size: .68rem;
+}
+
+.gallery-watermark-segmented {
+  display: inline-flex;
+  align-items: center;
+  background: #0a0c0e;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  padding: 4px;
+  gap: 2px;
+}
+
+.gallery-watermark-pill {
+  border: 0;
+  background: transparent;
+  color: #8c9094;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: .78rem;
+  font-weight: 600;
+  letter-spacing: .01em;
+  padding: .42rem 1rem;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 180ms ease;
+  white-space: nowrap;
+}
+
+.gallery-watermark-pill:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.gallery-watermark-pill.is-active {
+  background: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
+}
+
+.gallery-watermark-panel__sub {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .8rem;
+  flex-wrap: wrap;
+  padding-top: .65rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.gallery-watermark-panel__hint {
+  margin: 0;
+  color: #888d91;
+  font-size: .68rem;
+  line-height: 1.45;
+  flex: 1 1 240px;
+}
+
+.gallery-watermark-panel__batch {
+  display: flex;
+  align-items: center;
+  gap: .65rem;
+  flex-wrap: wrap;
+}
+
+.gallery-watermark-panel__count {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: .68rem;
+  color: #ff8593;
+  font-weight: 600;
+}
+
+.gallery-watermark-panel__batch-buttons {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+}
+
+.gallery-watermark-mini-btn {
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #c9cbcd;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: .64rem;
+  font-weight: 600;
+  padding: .22rem .6rem;
+  cursor: pointer;
+  transition: all 160ms ease;
+}
+
+.gallery-watermark-mini-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+/* Botón individual de marca de agua en las vistas previas de subida */
+.gallery-upload-preview__wm-pill {
+  position: absolute;
+  bottom: 26px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100% - 8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-radius: 4px;
+  padding: .22rem .55rem;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: .6rem;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  border: none;
+  outline: none;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: opacity 140ms ease, transform 140ms ease, filter 140ms ease;
+  z-index: 2;
+  line-height: 1;
+}
+
+.gallery-upload-preview__wm-pill.is-on {
+  background: rgba(255, 255, 255, 0.92);
+  color: #0a0c0e;
+  box-shadow: 0 1px 8px rgba(0, 0, 0, 0.55);
+}
+
+.gallery-upload-preview__wm-pill.is-off {
+  background: rgba(20, 22, 26, 0.86);
+  color: rgba(255, 255, 255, 0.45);
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
+}
+
+.gallery-upload-preview__wm-pill:hover {
+  filter: brightness(1.12);
+  transform: translateX(-50%) scale(1.04);
+}
+
+/* Barra de herramientas y botones en el gestor de fotos existentes */
+.gallery-photo-manager__wm-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .8rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.1rem;
+  padding: .65rem .95rem;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.gallery-photo-manager__wm-toolbar-info {
+  display: flex;
+  align-items: center;
+  gap: .45rem;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: .74rem;
+  color: #d1d4d6;
+}
+
+.gallery-photo-manager__wm-toolbar-info strong {
+  color: #ffffff;
+}
+
+.gallery-photo-manager__wm-toolbar-info span {
+  color: #8f9396;
+}
+
+.gallery-photo-manager__wm-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: .45rem;
+}
+
+.gallery-photo-manager__cell-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: .35rem;
+  margin-top: .4rem;
+}
+
+.gallery-photo-manager__action-btn {
+  min-height: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #b7b9bb;
+  cursor: pointer;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: .63rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  transition: all 160ms ease;
+  padding: 0 .4rem;
+  white-space: nowrap;
+}
+
+.gallery-photo-manager__action-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: #ffffff;
+}
+
+.gallery-photo-manager__action-btn.is-active {
+  background: var(--gallery-red);
+  border-color: var(--gallery-red);
+  color: #ffffff;
+}
+
+.gallery-photo-manager__wm-btn.is-wm-active {
+  background: rgba(43, 134, 255, 0.18);
+  border-color: rgba(64, 153, 255, 0.5);
+  color: #80bdff;
+}
+
+.gallery-photo-manager__wm-btn.is-wm-active:hover {
+  background: rgba(43, 134, 255, 0.28);
+  color: #ffffff;
+}
+
+.gallery-photo-manager__wm-btn.is-wm-inactive {
+  background: rgba(255, 255, 255, 0.025);
+  border-color: rgba(255, 255, 255, 0.1);
+  color: #6f7377;
+}
+
+.gallery-photo-manager__wm-tag {
+  position: absolute;
+  top: .35rem;
+  left: .35rem;
+  z-index: 2;
+  padding: .15rem .4rem;
+  border-radius: 4px;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: .54rem;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  line-height: 1.2;
+}
+
+.gallery-photo-manager__wm-tag.is-wm {
+  background: rgba(10, 16, 24, 0.85);
+  color: #79b7ff;
+  border: 1px solid rgba(64, 153, 255, 0.45);
+}
+
+.gallery-photo-manager__wm-tag.is-clean {
+  background: rgba(10, 12, 14, 0.85);
+  color: #7f8386;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+

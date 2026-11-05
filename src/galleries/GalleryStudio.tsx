@@ -5,6 +5,7 @@ import francoPortrait from '../assets/franco-acuna-portrait.jpg'
 import { supabase } from './supabaseClient'
 import {
   addGalleryPhotos,
+  cleanPhotoFilename,
   createGallery,
   deleteGallery,
   galleryShareUrl,
@@ -13,8 +14,10 @@ import {
   listGalleries,
   refreshGalleryPhotosForExport,
   saveGalleryPhotoSelections,
+  setAllGalleryPhotosWatermark,
   setGalleryCoverPhoto,
   setGalleryStatus,
+  setPhotoWatermark,
   uploadGalleryCoverPhoto,
   usingDemoGalleryStore,
   type PhotoGallery,
@@ -60,6 +63,92 @@ function PhotoWatermark() {
     <div className="gallery-photo-watermark" aria-hidden="true">
       <span className="gallery-photo-watermark__lines" />
       <span className="gallery-photo-watermark__badge">FRANCO DIGITAL</span>
+    </div>
+  )
+}
+
+function WatermarkToggleControl({
+  hasWatermark,
+  onChange,
+  onApplyAll,
+  totalPhotos,
+  watermarkedCount,
+}: {
+  hasWatermark: boolean
+  onChange: (enabled: boolean) => void
+  onApplyAll?: (enabled: boolean) => void
+  totalPhotos?: number
+  watermarkedCount?: number
+}) {
+  return (
+    <div className="gallery-watermark-panel">
+      <div className="gallery-watermark-panel__main">
+        <label className="gallery-watermark-checkbox">
+          <input
+            type="checkbox"
+            checked={hasWatermark}
+            onChange={(e) => onChange(e.target.checked)}
+          />
+          <span className="gallery-watermark-checkbox__box" aria-hidden="true">
+            {hasWatermark ? '✓' : ''}
+          </span>
+          <span className="gallery-watermark-checkbox__label">
+            <strong>Marca de agua</strong>
+            <small>{hasWatermark ? 'Con marca de agua (Franco Digital)' : 'Sin marca de agua (foto limpia)'}</small>
+          </span>
+        </label>
+
+        <div className="gallery-watermark-segmented" role="group" aria-label="Modo de marca de agua">
+          <button
+            type="button"
+            className={`gallery-watermark-pill ${hasWatermark ? 'is-active' : ''}`}
+            onClick={() => onChange(true)}
+          >
+            Con marca de agua
+          </button>
+          <button
+            type="button"
+            className={`gallery-watermark-pill ${!hasWatermark ? 'is-active' : ''}`}
+            onClick={() => onChange(false)}
+          >
+            Sin marca de agua
+          </button>
+        </div>
+      </div>
+
+      <div className="gallery-watermark-panel__sub">
+        <p className="gallery-watermark-panel__hint">
+          {hasWatermark
+            ? 'Aparecerá el sello con líneas y badge “FRANCO DIGITAL” protegiendo la imagen.'
+            : 'Las fotos se mostrarán en su versión limpia original, sin ninguna marca visual encima.'}
+        </p>
+
+        {typeof totalPhotos === 'number' && totalPhotos > 0 && onApplyAll && (
+          <div className="gallery-watermark-panel__batch">
+            {typeof watermarkedCount === 'number' && (
+              <span className="gallery-watermark-panel__count">
+                {watermarkedCount} de {totalPhotos} con marca
+              </span>
+            )}
+            <div className="gallery-watermark-panel__batch-buttons">
+              <button
+                type="button"
+                className="gallery-watermark-mini-btn"
+                onClick={() => onApplyAll(true)}
+              >
+                Todas con marca
+              </button>
+              <button
+                type="button"
+                className="gallery-watermark-mini-btn"
+                onClick={() => onApplyAll(false)}
+              >
+                Todas sin marca
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -151,7 +240,7 @@ async function buildGalleryPdf(gallery: PhotoGallery, photos: GalleryPhoto[]) {
     document.setFont('helvetica', 'normal')
     document.setFontSize(9)
     document.setTextColor(100, 103, 107)
-    document.text(`${String(index + 1).padStart(2, '0')}  /  ${photos.length}     ${photo.filename}`, margin, pageHeight - 24, { maxWidth: pageWidth - margin * 2 })
+    document.text(`${String(index + 1).padStart(2, '0')}  /  ${photos.length}     ${cleanPhotoFilename(photo.filename)}`, margin, pageHeight - 24, { maxWidth: pageWidth - margin * 2 })
   }
 
   const filename = gallery.title.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '').toLowerCase() || 'galeria'
@@ -161,9 +250,13 @@ async function buildGalleryPdf(gallery: PhotoGallery, photos: GalleryPhoto[]) {
 function GalleryPhotoManager({
   gallery,
   onSetCover,
+  onToggleWatermark,
+  onSetAllWatermark,
 }: {
   gallery: PhotoGallery
   onSetCover: (photoId: string) => void
+  onToggleWatermark: (photoId: string, enabled: boolean) => void
+  onSetAllWatermark: (enabled: boolean) => void
 }) {
   const defaultSelected = gallery.clientSelectedPhotoIds.filter((id) => gallery.photos.some((photo) => photo.id === id))
   const clientSelectionKey = defaultSelected.join('|')
@@ -177,6 +270,7 @@ function GalleryPhotoManager({
   const [error, setError] = useState('')
   const photosForDelivery = gallery.photos.filter((photo) => selected.includes(photo.id))
   const clientSelectionCount = defaultSelected.length
+  const watermarkedCount = gallery.photos.filter((p) => p.hasWatermark !== false).length
 
   const toggle = (photoId: string) => setSelected((current) => current.includes(photoId)
     ? current.filter((id) => id !== photoId)
@@ -203,13 +297,40 @@ function GalleryPhotoManager({
       <summary>Elegir fotos y preparar entrega <span>{selected.length} elegidas</span></summary>
       <div className="gallery-photo-manager__content">
         <div className="gallery-photo-manager__heading">
-          <p>{clientSelectionCount ? `El cliente eligió ${clientSelectionCount} ${clientSelectionCount === 1 ? 'foto' : 'fotos'}.` : 'El cliente todavía no eligió fotos.'} Marcá las que querés incluir en el documento o definí cuál es la portada del evento.</p>
+          <p>{clientSelectionCount ? `El cliente eligió ${clientSelectionCount} ${clientSelectionCount === 1 ? 'foto' : 'fotos'}.` : 'El cliente todavía no eligió fotos.'} Marcá las que querés incluir en el documento, definí la portada o cambiá qué fotos llevan marca de agua.</p>
         </div>
+
+        <div className="gallery-photo-manager__wm-toolbar">
+          <div className="gallery-photo-manager__wm-toolbar-info">
+            <strong>💧 Marca de agua:</strong>
+            <span>{watermarkedCount} de {gallery.photos.length} fotos con marca</span>
+          </div>
+          <div className="gallery-photo-manager__wm-toolbar-actions">
+            <button
+              type="button"
+              className="gallery-watermark-mini-btn"
+              onClick={() => onSetAllWatermark(true)}
+              title="Poner marca de agua a todas las fotos de esta galería"
+            >
+              Activar en todas
+            </button>
+            <button
+              type="button"
+              className="gallery-watermark-mini-btn"
+              onClick={() => onSetAllWatermark(false)}
+              title="Quitar marca de agua de todas las fotos de esta galería"
+            >
+              Quitar de todas
+            </button>
+          </div>
+        </div>
+
         <div className="gallery-photo-manager__grid">
           {gallery.photos.map((photo, index) => {
             const isSelected = selected.includes(photo.id)
             const chosenByClient = defaultSelected.includes(photo.id)
             const isCover = gallery.coverPhotoId === photo.id || (!gallery.coverPhotoId && index === 0)
+            const hasWatermark = photo.hasWatermark !== false
             return (
               <div key={photo.id} className="gallery-photo-manager__cell">
                 <button
@@ -219,20 +340,33 @@ function GalleryPhotoManager({
                   aria-pressed={isSelected}
                 >
                   <img src={photo.url} alt="" loading="lazy" />
+                  <span className={`gallery-photo-manager__wm-tag ${hasWatermark ? 'is-wm' : 'is-clean'}`}>
+                    {hasWatermark ? 'MARCA' : 'SIN MARCA'}
+                  </span>
                   <span className="gallery-photo-manager__check">{isSelected ? '✓' : '+'}</span>
                   <span className="gallery-photo-manager__caption">
-                    {String(index + 1).padStart(2, '0')} · {photo.filename.replace(/^\[PORTADA\]\s*/i, '')}
+                    {String(index + 1).padStart(2, '0')} · {cleanPhotoFilename(photo.filename)}
                     {chosenByClient && <small>Elegida por cliente</small>}
                   </span>
                 </button>
-                <button
-                  type="button"
-                  className={`gallery-photo-manager__cover-btn ${isCover ? 'is-active' : ''}`}
-                  title={isCover ? 'Foto de portada actual' : 'Fijar esta foto como portada del evento'}
-                  onClick={() => onSetCover(photo.id)}
-                >
-                  {isCover ? '★ Portada' : '☆ Hacer portada'}
-                </button>
+                <div className="gallery-photo-manager__cell-buttons">
+                  <button
+                    type="button"
+                    className={`gallery-photo-manager__action-btn ${isCover ? 'is-active' : ''}`}
+                    title={isCover ? 'Foto de portada actual' : 'Fijar esta foto como portada del evento'}
+                    onClick={() => onSetCover(photo.id)}
+                  >
+                    {isCover ? '★ Portada' : '☆ Portada'}
+                  </button>
+                  <button
+                    type="button"
+                    className={`gallery-photo-manager__action-btn gallery-photo-manager__wm-btn ${hasWatermark ? 'is-wm-active' : 'is-wm-inactive'}`}
+                    title={hasWatermark ? 'Tiene marca de agua activa. Clic para quitarla.' : 'Sin marca de agua. Clic para activarla.'}
+                    onClick={() => onToggleWatermark(photo.id, !hasWatermark)}
+                  >
+                    {hasWatermark ? 'Con marca' : 'Sin marca'}
+                  </button>
+                </div>
               </div>
             )
           })}
@@ -304,11 +438,27 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
   const [price, setPrice] = useState('5000')
   const [coverFile, setCoverFile] = useState<File | null>(null)
   const [files, setFiles] = useState<File[]>([])
+  const [fileWatermarks, setFileWatermarks] = useState<boolean[]>([])
+  const [masterWatermark, setMasterWatermark] = useState(true)
+
+  // Estado para modal de agregar fotos a una galería existente
+  const [addingToGallery, setAddingToGallery] = useState<PhotoGallery | null>(null)
+  const [addFiles, setAddFiles] = useState<File[]>([])
+  const [addFileWatermarks, setAddFileWatermarks] = useState<boolean[]>([])
+  const [addMasterWatermark, setAddMasterWatermark] = useState(true)
+
   const coverPreviewUrl = useMemo(() => coverFile ? URL.createObjectURL(coverFile) : null, [coverFile])
-  const filePreviews = useMemo(() => files.map((file) => ({
+  const filePreviews = useMemo(() => files.map((file, index) => ({
     file,
     url: URL.createObjectURL(file),
-  })), [files])
+    hasWatermark: fileWatermarks[index] ?? masterWatermark,
+  })), [files, fileWatermarks, masterWatermark])
+
+  const addFilePreviews = useMemo(() => addFiles.map((file, index) => ({
+    file,
+    url: URL.createObjectURL(file),
+    hasWatermark: addFileWatermarks[index] ?? addMasterWatermark,
+  })), [addFiles, addFileWatermarks, addMasterWatermark])
 
   useEffect(() => () => {
     if (coverPreviewUrl) URL.revokeObjectURL(coverPreviewUrl)
@@ -318,6 +468,10 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
     filePreviews.forEach(({ url }) => URL.revokeObjectURL(url))
   }, [filePreviews])
 
+  useEffect(() => () => {
+    addFilePreviews.forEach(({ url }) => URL.revokeObjectURL(url))
+  }, [addFilePreviews])
+
   const closeCreate = () => {
     setShowCreate(false)
     setTitle('')
@@ -326,6 +480,15 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
     setPrice('5000')
     setCoverFile(null)
     setFiles([])
+    setFileWatermarks([])
+    setMasterWatermark(true)
+  }
+
+  const closeAddPhotos = () => {
+    setAddingToGallery(null)
+    setAddFiles([])
+    setAddFileWatermarks([])
+    setAddMasterWatermark(true)
   }
 
   const validateFiles = (selected: File[]) => {
@@ -356,7 +519,7 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
     setNotice('')
     try {
       const id = await createGallery({ title: title.trim(), clientName: clientName.trim(), eventDate, coverFile })
-      if (files.length) await addGalleryPhotos(id, files, priceArs)
+      if (files.length) await addGalleryPhotos(id, files, priceArs, fileWatermarks)
       setTitle('')
       setClientName('')
       setEventDate('')
@@ -367,6 +530,56 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
       const message = cause instanceof Error ? cause.message : 'No pudimos crear la galería.'
       await refresh()
       setError(message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const submitAddPhotos = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!addingToGallery || !addFiles.length) return
+    setBusy(true)
+    setError('')
+    setNotice('')
+    try {
+      const priceArs = addingToGallery.photos[0]?.priceArs ?? 5000
+      await addGalleryPhotos(addingToGallery.id, addFiles, priceArs, addFileWatermarks)
+      const count = addFiles.length
+      closeAddPhotos()
+      await refresh()
+      setNotice(`${count} ${count === 1 ? 'foto agregada' : 'fotos agregadas'} a “${addingToGallery.title}”.`)
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : 'No pudimos subir las fotos.'
+      await refresh()
+      setError(message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleTogglePhotoWatermark = async (photoId: string, enabled: boolean) => {
+    setBusy(true)
+    setError('')
+    try {
+      await setPhotoWatermark(photoId, enabled)
+      await refresh()
+      setNotice(enabled ? 'Marca de agua activada en la foto.' : 'Marca de agua quitada de la foto.')
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'No pudimos actualizar la marca de agua.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleSetAllWatermark = async (galleryId: string, enabled: boolean) => {
+    setBusy(true)
+    setError('')
+    try {
+      await setAllGalleryPhotosWatermark(galleryId, enabled)
+      await refresh()
+      setNotice(enabled ? 'Marca de agua activada en todas las fotos de la galería.' : 'Marca de agua quitada de todas las fotos de la galería.')
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'No pudimos actualizar las fotos.')
     } finally {
       setBusy(false)
     }
@@ -417,22 +630,6 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
       setNotice(status === 'published' ? 'La galería ya está disponible para compartir.' : 'La galería quedó como borrador.')
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'No pudimos actualizar la galería.')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const uploadMore = async (gallery: PhotoGallery, selected: File[]) => {
-    if (!selected.length || !validateFiles(selected)) return
-    setBusy(true)
-    try {
-      await addGalleryPhotos(gallery.id, selected, gallery.photos[0]?.priceArs ?? 5000)
-      await refresh()
-      setNotice(`${selected.length} ${selected.length === 1 ? 'foto agregada' : 'fotos agregadas'} a ${gallery.title}.`)
-    } catch (cause) {
-      const message = cause instanceof Error ? cause.message : 'No pudimos subir las fotos.'
-      await refresh()
-      setError(message)
     } finally {
       setBusy(false)
     }
@@ -515,7 +712,24 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
                       <div className="gallery-card__actions">
                         {gallery.status === 'published' && <button type="button" className="gallery-button gallery-button--small gallery-button--outline" onClick={() => void copyLink(gallery)}>Copiar link <span>↗</span></button>}
                         <button type="button" className={`gallery-button gallery-button--small ${gallery.status === 'published' ? 'gallery-button--quiet' : 'gallery-button--primary'}`} disabled={busy} onClick={() => void toggleStatus(gallery)}>{gallery.status === 'published' ? 'Pausar link' : 'Publicar'}</button>
-                        <label className="gallery-upload-more">＋<span>Agregar fotos</span><input type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(event) => { if (event.target.files) void uploadMore(gallery, Array.from(event.target.files)); event.target.value = '' }} /></label>
+                        <label className="gallery-upload-more">
+                          ＋<span>Agregar fotos</span>
+                          <input
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp"
+                            multiple
+                            onChange={(event) => {
+                              const selected = Array.from(event.target.files ?? [])
+                              if (selected.length && validateFiles(selected)) {
+                                setAddingToGallery(gallery)
+                                setAddFiles(selected)
+                                setAddFileWatermarks(selected.map(() => true))
+                                setAddMasterWatermark(true)
+                              }
+                              event.target.value = ''
+                            }}
+                          />
+                        </label>
                         <button type="button" className="gallery-button gallery-button--small gallery-button--danger" disabled={busy} onClick={() => void removeGallery(gallery)}>Eliminar galería</button>
                       </div>
                       {gallery.status === 'published' && <a className="gallery-card__share" href={galleryShareUrl(gallery.shareToken)} target="_blank" rel="noreferrer">Abrir link de cliente <span>↗</span></a>}
@@ -524,6 +738,8 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
                       <GalleryPhotoManager
                         gallery={gallery}
                         onSetCover={(photoId) => void handleSetCoverPhoto(gallery, photoId)}
+                        onToggleWatermark={(photoId, enabled) => void handleTogglePhotoWatermark(photoId, enabled)}
+                        onSetAllWatermark={(enabled) => void handleSetAllWatermark(gallery.id, enabled)}
                       />
                     )}
                   </article>
@@ -570,10 +786,179 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
           </label>
         </div>
 
-        <label className="gallery-dropzone"><input type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(event) => { setFiles(Array.from(event.target.files ?? [])); event.target.value = '' }} /><span className="gallery-dropzone__icon">↑</span><strong>{files.length ? `${files.length} ${files.length === 1 ? 'foto seleccionada' : 'fotos seleccionadas'}` : 'Elegí las fotos para esta galería'}</strong><small>JPG, PNG o WebP · hasta 6 MB por foto</small><span className="gallery-dropzone__button">Seleccionar archivos</span></label>
-        {filePreviews.length > 0 && <div className="gallery-upload-previews" aria-label="Vista previa de las fotos seleccionadas">{filePreviews.map(({ file, url }, index) => <figure className="gallery-upload-preview" key={`${file.name}-${file.lastModified}-${index}`}><img src={url} alt={`Vista previa: ${file.name}`} /><figcaption title={file.name}>{file.name}</figcaption><button type="button" aria-label={`Quitar ${file.name}`} onClick={() => setFiles((current) => current.filter((_, fileIndex) => fileIndex !== index))}>×</button></figure>)}</div>}
-        <div className="gallery-modal__actions"><button type="button" className="gallery-button gallery-button--quiet" onClick={() => closeCreate()}>Cancelar</button><button type="submit" className="gallery-button gallery-button--primary" disabled={busy}>{busy ? 'Guardando…' : 'Crear galería'} <span>↗</span></button></div>
+        <label className="gallery-dropzone">
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            multiple
+            onChange={(event) => {
+              const selected = Array.from(event.target.files ?? [])
+              if (validateFiles(selected)) {
+                setFiles(selected)
+                setFileWatermarks(selected.map(() => masterWatermark))
+              }
+              event.target.value = ''
+            }}
+          />
+          <span className="gallery-dropzone__icon">↑</span>
+          <strong>{files.length ? `${files.length} ${files.length === 1 ? 'foto seleccionada' : 'fotos seleccionadas'}` : 'Elegí las fotos para esta galería'}</strong>
+          <small>JPG, PNG o WebP · hasta 6 MB por foto</small>
+          <span className="gallery-dropzone__button">Seleccionar archivos</span>
+        </label>
+
+        {/* Control de marca de agua estilo Lightroom / editor */}
+        <WatermarkToggleControl
+          hasWatermark={masterWatermark}
+          onChange={(enabled) => {
+            setMasterWatermark(enabled)
+            setFileWatermarks(files.map(() => enabled))
+          }}
+          onApplyAll={(enabled) => {
+            setMasterWatermark(enabled)
+            setFileWatermarks(files.map(() => enabled))
+          }}
+          totalPhotos={files.length}
+          watermarkedCount={fileWatermarks.filter((w) => w).length}
+        />
+
+        {filePreviews.length > 0 && (
+          <div className="gallery-upload-previews" aria-label="Vista previa de las fotos seleccionadas">
+            {filePreviews.map(({ file, url, hasWatermark }, index) => (
+              <figure className="gallery-upload-preview" key={`${file.name}-${file.lastModified}-${index}`}>
+                <img src={url} alt={`Vista previa: ${file.name}`} />
+                <button
+                  type="button"
+                  aria-label={`Quitar ${file.name}`}
+                  onClick={() => {
+                    setFiles((current) => current.filter((_, fileIndex) => fileIndex !== index))
+                    setFileWatermarks((current) => current.filter((_, fileIndex) => fileIndex !== index))
+                  }}
+                >
+                  ×
+                </button>
+                <button
+                  type="button"
+                  className={`gallery-upload-preview__wm-pill ${hasWatermark ? 'is-on' : 'is-off'}`}
+                  title={hasWatermark ? 'Tiene marca de agua activa. Clic para quitarla.' : 'Sin marca de agua. Clic para activarla.'}
+                  onClick={(e) => {
+                    e.preventDefault()
+                    setFileWatermarks((current) => {
+                      const next = [...current]
+                      const val = next[index] ?? masterWatermark
+                      next[index] = !val
+                      return next
+                    })
+                  }}
+                >
+                  {hasWatermark ? 'Con marca' : 'Sin marca'}
+                </button>
+                <figcaption title={file.name}>{file.name}</figcaption>
+              </figure>
+            ))}
+          </div>
+        )}
+        <div className="gallery-modal__actions">
+          <button type="button" className="gallery-button gallery-button--quiet" onClick={() => closeCreate()}>Cancelar</button>
+          <button type="submit" className="gallery-button gallery-button--primary" disabled={busy}>{busy ? 'Guardando…' : 'Crear galería'} <span>↗</span></button>
+        </div>
       </form></section></div>}
+
+      {/* Modal para agregar fotos a una galería existente con control de marca de agua */}
+      {addingToGallery && (
+        <div className="gallery-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeAddPhotos() }}>
+          <section className="gallery-modal" role="dialog" aria-modal="true" aria-labelledby="add-photos-title">
+            <header>
+              <div>
+                <p className="gallery-overline">SUBIR FOTOS</p>
+                <h2 id="add-photos-title">Agregar fotos a “{addingToGallery.title}”</h2>
+              </div>
+              <button type="button" onClick={closeAddPhotos} aria-label="Cerrar">×</button>
+            </header>
+            <form onSubmit={submitAddPhotos}>
+              {/* Control de marca de agua */}
+              <WatermarkToggleControl
+                hasWatermark={addMasterWatermark}
+                onChange={(enabled) => {
+                  setAddMasterWatermark(enabled)
+                  setAddFileWatermarks(addFiles.map(() => enabled))
+                }}
+                onApplyAll={(enabled) => {
+                  setAddMasterWatermark(enabled)
+                  setAddFileWatermarks(addFiles.map(() => enabled))
+                }}
+                totalPhotos={addFiles.length}
+                watermarkedCount={addFileWatermarks.filter((w) => w).length}
+              />
+
+              <label className="gallery-dropzone">
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  multiple
+                  onChange={(event) => {
+                    const more = Array.from(event.target.files ?? [])
+                    if (validateFiles(more)) {
+                      setAddFiles((curr) => [...curr, ...more])
+                      setAddFileWatermarks((curr) => [...curr, ...more.map(() => addMasterWatermark)])
+                    }
+                    event.target.value = ''
+                  }}
+                />
+                <span className="gallery-dropzone__icon">↑</span>
+                <strong>{addFiles.length} {addFiles.length === 1 ? 'foto seleccionada' : 'fotos seleccionadas'}</strong>
+                <small>Podés elegir más fotos o hacer clic en cada foto abajo para cambiar su marca de agua</small>
+                <span className="gallery-dropzone__button">Elegir más fotos</span>
+              </label>
+
+              {addFilePreviews.length > 0 && (
+                <div className="gallery-upload-previews" aria-label="Vista previa de las fotos seleccionadas">
+                  {addFilePreviews.map(({ file, url, hasWatermark }, index) => (
+                    <figure className="gallery-upload-preview" key={`${file.name}-${file.lastModified}-${index}`}>
+                      <img src={url} alt={`Vista previa: ${file.name}`} />
+                      <button
+                        type="button"
+                        aria-label={`Quitar ${file.name}`}
+                        onClick={() => {
+                          setAddFiles((current) => current.filter((_, fileIndex) => fileIndex !== index))
+                          setAddFileWatermarks((current) => current.filter((_, fileIndex) => fileIndex !== index))
+                        }}
+                      >
+                        ×
+                      </button>
+                      <button
+                        type="button"
+                        className={`gallery-upload-preview__wm-pill ${hasWatermark ? 'is-on' : 'is-off'}`}
+                        title={hasWatermark ? 'Tiene marca de agua activa. Clic para quitarla.' : 'Sin marca de agua. Clic para activarla.'}
+                        onClick={(e) => {
+                          e.preventDefault()
+                          setAddFileWatermarks((current) => {
+                            const next = [...current]
+                            const val = next[index] ?? addMasterWatermark
+                            next[index] = !val
+                            return next
+                          })
+                        }}
+                      >
+                        {hasWatermark ? 'Con marca' : 'Sin marca'}
+                      </button>
+                      <figcaption title={file.name}>{file.name}</figcaption>
+                    </figure>
+                  ))}
+                </div>
+              )}
+
+              <div className="gallery-modal__actions">
+                <button type="button" className="gallery-button gallery-button--quiet" onClick={closeAddPhotos}>
+                  Cancelar
+                </button>
+                <button type="submit" className="gallery-button gallery-button--primary" disabled={busy || addFiles.length === 0}>
+                  {busy ? 'Subiendo fotos…' : `Subir ${addFiles.length} ${addFiles.length === 1 ? 'foto' : 'fotos'}`} <span>↗</span>
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
     </div>
   )
 }
@@ -622,7 +1007,7 @@ function PublicPhotoItem({
           onError={() => setHasError(true)}
           className={`gallery-client__photo-img ${loaded ? 'is-visible' : 'is-hidden'}`}
         />
-        <PhotoWatermark />
+        {photo.hasWatermark !== false && <PhotoWatermark />}
       </button>
       <button
         type="button"
@@ -1021,10 +1406,10 @@ function PublicGallery({ token }: { token: string }) {
                     decoding="async"
                     onContextMenu={(e) => e.preventDefault()}
                   />
-                  <PhotoWatermark />
+                  {gallery.photos[previewIndex].hasWatermark !== false && <PhotoWatermark />}
                 </div>
                 <div className="gallery-lightbox__caption">
-                  <span>{String(previewIndex + 1).padStart(2, '0')} / {String(gallery.photos.length).padStart(2, '0')} · {gallery.photos[previewIndex].filename.replace(/^\[PORTADA\]\s*/i, '')}</span>
+                  <span>{String(previewIndex + 1).padStart(2, '0')} / {String(gallery.photos.length).padStart(2, '0')} · {cleanPhotoFilename(gallery.photos[previewIndex].filename)}</span>
                   <button
                     type="button"
                     className="gallery-lightbox__select-button"
