@@ -555,6 +555,7 @@ const FlexCarousel = ({
     let activeIndex = -1;
     let interactedAt = -Infinity;
     let autoplayAt = performance.now();
+    let autoplayTimeout = 0;
     let hasFocus = false;
     let deform = 0;
     let deformVel = 0;
@@ -915,6 +916,7 @@ const FlexCarousel = ({
         else focus.pending = -1;
       }
 
+      window.clearTimeout(autoplayTimeout);
       if (
         s.autoplay &&
         !reducedMotion &&
@@ -924,14 +926,25 @@ const FlexCarousel = ({
         !pointer.down &&
         !hasFocus &&
         mode === 'spring' &&
-        Math.abs(goal - pos) < 1 &&
-        now - interactedAt > 3000 &&
-        now - autoplayAt > s.interval * 1000
+        Math.abs(goal - pos) < 1
       ) {
-        autoplayAt = now;
-        step(m, 1);
+        if (now - interactedAt > 3000 && now - autoplayAt > s.interval * 1000) {
+          autoplayAt = now;
+          step(m, 1);
+          animating = true;
+        } else {
+          const remaining = Math.max(100, Math.max(3000 - (now - interactedAt), s.interval * 1000 - (now - autoplayAt)));
+          autoplayTimeout = window.setTimeout(() => {
+            if (alive && visible) {
+              const currentS = settingsRef.current;
+              if (currentS?.autoplay && !reducedMotion) {
+                step(metrics(currentS), 1);
+                start();
+              }
+            }
+          }, remaining);
+        }
       }
-      if (s.autoplay && !reducedMotion) animating = true;
 
       const travel = Math.abs(pos - lastPos) / dt;
       lastPos = pos;
@@ -1337,6 +1350,7 @@ const FlexCarousel = ({
       alive = false;
       visible = false;
       engineRef.current = null;
+      window.clearTimeout(autoplayTimeout);
       cancelAnimationFrame(raf);
       resizeObserver.disconnect();
       intersectionObserver.disconnect();

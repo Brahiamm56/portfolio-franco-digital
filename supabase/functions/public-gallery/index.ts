@@ -7,12 +7,12 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
-function json(body: unknown, status = 200) {
+function json(body: unknown, status = 200, cacheControl = 'private, no-store, max-age=0') {
   return new Response(JSON.stringify(body), {
     status,
     headers: {
       ...corsHeaders,
-      'Cache-Control': 'private, no-store, max-age=0',
+      'Cache-Control': cacheControl,
       'Content-Type': 'application/json',
       'Referrer-Policy': 'no-referrer',
       'X-Content-Type-Options': 'nosniff',
@@ -168,7 +168,7 @@ const handleRequest = withSupabase({ auth: 'publishable' }, async (request, cont
     if (galleriesWithPreviews.some((gallery) => gallery === null)) {
       return json({ error: 'No pudimos preparar las portadas.' }, 500)
     }
-    return json({ galleries: galleriesWithPreviews })
+    return json({ galleries: galleriesWithPreviews }, 200, 'public, max-age=60, s-maxage=300, stale-while-revalidate=600')
   }
 
   if (!/^[a-f0-9]{48}$/.test(token)) return json({ error: 'Galería no encontrada.' }, 404)
@@ -244,7 +244,7 @@ const handleRequest = withSupabase({ auth: 'publishable' }, async (request, cont
       clientSelectedPhotoIds: gallery.client_selected_photo_ids ?? [],
       photos: signedPhotos,
     },
-  })
+  }, 200, 'public, max-age=60, s-maxage=300, stale-while-revalidate=600')
 })
 
 Deno.serve((request) => {

@@ -1501,19 +1501,71 @@ function CartBottomSheet({
   )
 }
 
-const BATCH_SIZE = 12
+function PublicGallerySkeleton({ onBack }: { onBack?: (e: React.MouseEvent) => void }) {
+  return (
+    <div className="gallery-client is-skeleton-state" aria-busy="true" aria-label="Cargando galería de fotos">
+      <main className="gallery-client__main">
+        <a className="gallery-client__back" href="/galerias" onClick={onBack}>
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <g clipPath="url(#gallery-back-arrow-clip)">
+              <path d="M13.5303 8.53033C13.8232 8.23744 13.8232 7.76256 13.5303 7.46967C13.2374 7.17678 12.7626 7.17678 12.4697 7.46967L8.46967 11.4697C8.32902 11.6103 8.25 11.8011 8.25 12C8.25 12.1989 8.32902 12.3897 8.46967 12.5303L12.4697 16.5303C12.7626 16.8232 13.2374 16.8232 13.5303 16.5303C13.8232 16.2374 13.8232 15.7626 13.5303 15.4697L10.0607 12L13.5303 8.53033Z" fill="currentColor" />
+              <path fillRule="evenodd" clipRule="evenodd" d="M12 .25C5.51065 .25 .25 5.51065 .25 12S5.51065 23.75 12 23.75 23.75 18.4893 23.75 12 18.4893 .25 12 .25ZM1.75 12C1.75 6.33908 6.33908 1.75 12 1.75S22.25 6.33908 22.25 12 17.6609 22.25 12 22.25 1.75 17.6609 1.75 12Z" fill="currentColor" />
+            </g>
+            <defs><clipPath id="gallery-back-arrow-clip"><rect width="24" height="24" fill="currentColor" /></clipPath></defs>
+          </svg>
+          Volver a galerías
+        </a>
 
-function PublicGallery({ token }: { token: string }) {
+        {/* Portada y encabezado esqueleto inmediato */}
+        <header className="gallery-client__hero gallery-client__hero--skeleton">
+          <div className="gallery-client__hero-media">
+            <span className="gallery-client__hero-tag">GALERÍA DE FOTOS</span>
+            <div className="gallery-client__skeleton-shimmer" />
+          </div>
+          <div className="gallery-client__hero-body">
+            <div className="gallery-client__skeleton-line gallery-client__skeleton-line--client" />
+            <div className="gallery-client__skeleton-line gallery-client__skeleton-line--title" />
+            <div className="gallery-client__hero-bar">
+              <div className="gallery-client__hero-loading-badge">
+                <span className="gallery-spinner" />
+                <span>Cargando fotos del evento…</span>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        {/* Grilla esqueleto inmediata */}
+        <section className="gallery-client__grid" aria-hidden="true">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <article key={i} className="gallery-client__photo is-skeleton-card">
+              <div className="gallery-client__photo-skeleton">
+                <span className="gallery-client__photo-shimmer" />
+                <span className="gallery-client__photo-skeleton-num">{String(i + 1).padStart(2, '0')}</span>
+              </div>
+            </article>
+          ))}
+        </section>
+      </main>
+    </div>
+  )
+}
+
+function PublicGallery({ token, onNavigate }: { token: string; onNavigate?: (path: string) => void }) {
   const [gallery, setGallery] = useState<PublicPhotoGallery | null>(null)
   const [selected, setSelected] = useState<string[]>([])
   const [previewIndex, setPreviewIndex] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [unavailable, setUnavailable] = useState(false)
   const [selectionError, setSelectionError] = useState('')
-  const [visibleCount, setVisibleCount] = useState(BATCH_SIZE)
   const [cartSheetOpen, setCartSheetOpen] = useState(false)
-  const sentinelRef = useRef<HTMLDivElement | null>(null)
   const selectionQueue = useRef(Promise.resolve())
+
+  const handleBack = (e: React.MouseEvent) => {
+    if (onNavigate && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) {
+      e.preventDefault()
+      onNavigate('/galerias')
+    }
+  }
 
   useEffect(() => {
     let active = true
@@ -1523,7 +1575,6 @@ function PublicGallery({ token }: { token: string }) {
           setGallery(result)
           setSelected(result?.photos.filter((photo) => result.clientSelectedPhotoIds.includes(photo.id)).map((photo) => photo.id) ?? [])
           setUnavailable(!result)
-          setVisibleCount(BATCH_SIZE)
         }
       })
       .catch(() => { if (active) setUnavailable(true) })
@@ -1531,27 +1582,7 @@ function PublicGallery({ token }: { token: string }) {
     return () => { active = false }
   }, [token])
 
-  // Carga progresiva fluida de lotes con IntersectionObserver
-  useEffect(() => {
-    const sentinel = sentinelRef.current
-    if (!sentinel || !gallery) return
-    if (visibleCount >= gallery.photos.length) return
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0]?.isIntersecting) {
-          setVisibleCount((prev) => Math.min(prev + BATCH_SIZE, gallery.photos.length))
-        }
-      },
-      { rootMargin: '600px 0px', threshold: 0.01 }
-    )
-
-    observer.observe(sentinel)
-    return () => observer.disconnect()
-  }, [gallery, visibleCount])
-
   const openPreview = (index: number) => {
-    setVisibleCount((prev) => Math.max(prev, index + 1))
     setPreviewIndex(index)
   }
 
@@ -1559,9 +1590,7 @@ function PublicGallery({ token }: { token: string }) {
     if (!gallery || !gallery.photos.length) return
     setPreviewIndex((current) => {
       if (current === null) return null
-      const next = (current + step + gallery.photos.length) % gallery.photos.length
-      setVisibleCount((prev) => Math.max(prev, next + 1))
-      return next
+      return (current + step + gallery.photos.length) % gallery.photos.length
     })
   }, [gallery])
 
@@ -1614,12 +1643,31 @@ function PublicGallery({ token }: { token: string }) {
 
   return (
     <div className="gallery-client">
-      {loading ? <div className="gallery-client__state"><span className="gallery-spinner" /><p>Preparando tus fotos…</p></div> : unavailable || !gallery ? (
-        <main className="gallery-client__state"><span className="gallery-client__empty-mark">×</span><p className="gallery-overline">LINK NO DISPONIBLE</p><h1>Esta galería<br /><em>no está disponible.</em></h1><p>El link puede haber vencido o todavía no fue publicado. Escribile a Franco para pedir acceso.</p><a className="gallery-button gallery-button--primary" href={`https://wa.me/${whatsappPhone}?text=${encodeURIComponent('Hola Franco, necesito ayuda con el link de una galería.')}`} target="_blank" rel="noreferrer">Escribir por WhatsApp <span>↗</span></a></main>
+      {loading ? (
+        <PublicGallerySkeleton onBack={handleBack} />
+      ) : unavailable || !gallery ? (
+        <main className="gallery-client__state">
+          <span className="gallery-client__empty-mark">×</span>
+          <p className="gallery-overline">LINK NO DISPONIBLE</p>
+          <h1>Esta galería<br /><em>no está disponible.</em></h1>
+          <p>El link puede haber vencido o todavía no fue publicado. Escribile a Franco para pedir acceso.</p>
+          <a className="gallery-button gallery-button--primary" href={`https://wa.me/${whatsappPhone}?text=${encodeURIComponent('Hola Franco, necesito ayuda con el link de una galería.')}`} target="_blank" rel="noreferrer">
+            Escribir por WhatsApp <span>↗</span>
+          </a>
+        </main>
       ) : (
         <>
           <main className="gallery-client__main">
-            <a className="gallery-client__back" href="/galerias"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><g clipPath="url(#gallery-back-arrow-clip)"><path d="M13.5303 8.53033C13.8232 8.23744 13.8232 7.76256 13.5303 7.46967C13.2374 7.17678 12.7626 7.17678 12.4697 7.46967L8.46967 11.4697C8.32902 11.6103 8.25 11.8011 8.25 12C8.25 12.1989 8.32902 12.3897 8.46967 12.5303L12.4697 16.5303C12.7626 16.8232 13.2374 16.8232 13.5303 16.5303C13.8232 16.2374 13.8232 15.7626 13.5303 15.4697L10.0607 12L13.5303 8.53033Z" fill="currentColor" /><path fillRule="evenodd" clipRule="evenodd" d="M12 .25C5.51065 .25 .25 5.51065 .25 12S5.51065 23.75 12 23.75 23.75 18.4893 23.75 12 18.4893 .25 12 .25ZM1.75 12C1.75 6.33908 6.33908 1.75 12 1.75S22.25 6.33908 22.25 12 17.6609 22.25 12 22.25 1.75 17.6609 1.75 12Z" fill="currentColor" /></g><defs><clipPath id="gallery-back-arrow-clip"><rect width="24" height="24" fill="currentColor" /></clipPath></defs></svg>Volver a galerías</a>
+            <a className="gallery-client__back" href="/galerias" onClick={handleBack}>
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <g clipPath="url(#gallery-back-arrow-clip)">
+                  <path d="M13.5303 8.53033C13.8232 8.23744 13.8232 7.76256 13.5303 7.46967C13.2374 7.17678 12.7626 7.17678 12.4697 7.46967L8.46967 11.4697C8.32902 11.6103 8.25 11.8011 8.25 12C8.25 12.1989 8.32902 12.3897 8.46967 12.5303L12.4697 16.5303C12.7626 16.8232 13.2374 16.8232 13.5303 16.5303C13.8232 16.2374 13.8232 15.7626 13.5303 15.4697L10.0607 12L13.5303 8.53033Z" fill="currentColor" />
+                  <path fillRule="evenodd" clipRule="evenodd" d="M12 .25C5.51065 .25 .25 5.51065 .25 12S5.51065 23.75 12 23.75 23.75 18.4893 23.75 12 18.4893 .25 12 .25ZM1.75 12C1.75 6.33908 6.33908 1.75 12 1.75S22.25 6.33908 22.25 12 17.6609 22.25 12 22.25 1.75 17.6609 1.75 12Z" fill="currentColor" />
+                </g>
+                <defs><clipPath id="gallery-back-arrow-clip"><rect width="24" height="24" fill="currentColor" /></clipPath></defs>
+              </svg>
+              Volver a galerías
+            </a>
 
             {/* Portada y encabezado del evento */}
             <header className="gallery-client__hero">
@@ -1670,37 +1718,22 @@ function PublicGallery({ token }: { token: string }) {
 
             {selectionError && <p className="gallery-client__selection-error" role="alert">{selectionError}</p>}
             {gallery.photos.length ? (
-              <>
-                <section className="gallery-client__grid" aria-label="Fotos disponibles">
-                  {gallery.photos.slice(0, visibleCount).map((photo, index) => {
-                    const isSelected = selected.includes(photo.id)
-                    return (
-                      <PublicPhotoItem
-                        key={photo.id}
-                        photo={photo}
-                        index={index}
-                        galleryTitle={gallery.title}
-                        isSelected={isSelected}
-                        onOpenPreview={() => openPreview(index)}
-                        onToggle={() => togglePhoto(photo.id)}
-                      />
-                    )
-                  })}
-                </section>
-                {visibleCount < gallery.photos.length && (
-                  <div ref={sentinelRef} className="gallery-client__sentinel">
-                    <span className="gallery-spinner" />
-                    <p>Cargando más fotos ({visibleCount} de {gallery.photos.length})…</p>
-                    <button
-                      type="button"
-                      className="gallery-button gallery-button--quiet gallery-button--small"
-                      onClick={() => setVisibleCount((prev) => Math.min(prev + BATCH_SIZE * 2, gallery.photos.length))}
-                    >
-                      Cargar más fotos
-                    </button>
-                  </div>
-                )}
-              </>
+              <section className="gallery-client__grid" aria-label="Fotos disponibles">
+                {gallery.photos.map((photo, index) => {
+                  const isSelected = selected.includes(photo.id)
+                  return (
+                    <PublicPhotoItem
+                      key={photo.id}
+                      photo={photo}
+                      index={index}
+                      galleryTitle={gallery.title}
+                      isSelected={isSelected}
+                      onOpenPreview={() => openPreview(index)}
+                      onToggle={() => togglePhoto(photo.id)}
+                    />
+                  )
+                })}
+              </section>
             ) : (
               <div className="gallery-client__no-photos">Todavía no hay fotos en esta galería.</div>
             )}
@@ -1712,7 +1745,9 @@ function PublicGallery({ token }: { token: string }) {
                   <span>Hablar con Franco Digital</span>
                   <i aria-hidden="true">↗</i>
                 </a>
-                <a className="gallery-client__contact-logo" href="/" aria-label="Franco Digital, ir al inicio"><img src={francoLogo} alt="Logo FD" /></a>
+                <a className="gallery-client__contact-logo" href="/" onClick={(e) => { if (onNavigate && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) { e.preventDefault(); onNavigate('/'); } }} aria-label="Franco Digital, ir al inicio">
+                  <img src={francoLogo} alt="Logo FD" />
+                </a>
               </div>
             </section>
           </main>
@@ -1895,10 +1930,12 @@ function DirectoryCartSheet({
   isOpen,
   onClose,
   galleries,
+  onNavigate,
 }: {
   isOpen: boolean
   onClose: () => void
   galleries: PublishedGalleryLink[]
+  onNavigate?: (path: string) => void
 }) {
   const activeItems = useMemo(() => {
     if (!isOpen) return []
@@ -1988,6 +2025,13 @@ function DirectoryCartSheet({
                   </div>
                   <a
                     href={galleryShareUrl(gallery.shareToken)}
+                    onClick={(e) => {
+                      if (onNavigate && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) {
+                        e.preventDefault()
+                        onClose()
+                        onNavigate(`/galeria/${gallery.shareToken}`)
+                      }
+                    }}
                     className="gallery-button gallery-button--primary gallery-button--small"
                     style={{ minHeight: '34px', fontSize: '0.68rem', paddingInline: '0.8rem', flexShrink: 0 }}
                   >
@@ -2029,7 +2073,11 @@ function DirectoryCartButton({ onClick }: { onClick: () => void }) {
 
     updateCount()
     window.addEventListener('storage', updateCount)
-    return () => window.removeEventListener('storage', updateCount)
+    window.addEventListener('gallery-selection-changed', updateCount)
+    return () => {
+      window.removeEventListener('storage', updateCount)
+      window.removeEventListener('gallery-selection-changed', updateCount)
+    }
   }, [])
 
   return (
@@ -2046,15 +2094,23 @@ function DirectoryCartButton({ onClick }: { onClick: () => void }) {
   )
 }
 
-function PublishedEventCard({ gallery }: { gallery: PublishedGalleryLink }) {
+function PublishedEventCard({ gallery, onNavigate }: { gallery: PublishedGalleryLink; onNavigate?: (path: string) => void }) {
   const isNew = isGalleryNew(gallery.createdAt, gallery.eventDate)
   const formattedDate = formatEventDate(gallery.eventDate)
   const coverUrl = gallery.coverPhotoUrl || gallery.previewPhotos[0]?.url
+
+  const handleOpen = (e: React.MouseEvent) => {
+    if (onNavigate && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) {
+      e.preventDefault()
+      onNavigate(`/galeria/${gallery.shareToken}`)
+    }
+  }
 
   return (
     <article className="public-event-card">
       <a
         href={galleryShareUrl(gallery.shareToken)}
+        onClick={handleOpen}
         className="public-event-card__link"
         aria-label={`Ver fotos de ${gallery.title}`}
       >
@@ -2073,7 +2129,7 @@ function PublishedEventCard({ gallery }: { gallery: PublishedGalleryLink }) {
             </div>
           )}
 
-          {/* Etiqueta Nuevo si es reciente (desaparece si ya no es nuevo) */}
+          {/* Etiqueta Nuevo si es reciente */}
           {isNew && (
             <span className="public-event-card__badge-new">
               Nuevo
@@ -2106,7 +2162,7 @@ function PublishedEventCard({ gallery }: { gallery: PublishedGalleryLink }) {
   )
 }
 
-function PublicGalleryDirectory() {
+function PublicGalleryDirectory({ onNavigate }: { onNavigate?: (path: string) => void }) {
   const [galleries, setGalleries] = useState<PublishedGalleryLink[]>([])
   const [loading, setLoading] = useState(true)
   const [failed, setFailed] = useState(false)
@@ -2151,7 +2207,18 @@ function PublicGalleryDirectory() {
 
         {/* Barra superior: Volver a la izquierda y Carrito a la derecha */}
         <nav className="public-gallery-nav" aria-label="Navegación de galerías">
-          <a href="/" className="public-gallery-nav__back" aria-label="Volver al inicio" title="Volver al inicio">
+          <a
+            href="/"
+            onClick={(e) => {
+              if (onNavigate && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) {
+                e.preventDefault()
+                onNavigate('/')
+              }
+            }}
+            className="public-gallery-nav__back"
+            aria-label="Volver al inicio"
+            title="Volver al inicio"
+          >
             <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <path d="M15 19L8 12L15 5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
@@ -2240,7 +2307,7 @@ function PublicGalleryDirectory() {
         ) : (
           <div className="public-gallery-grid">
             {visibleGalleries.map((gallery) => (
-              <PublishedEventCard key={gallery.id} gallery={gallery} />
+              <PublishedEventCard key={gallery.id} gallery={gallery} onNavigate={onNavigate} />
             ))}
           </div>
         )}
@@ -2250,12 +2317,21 @@ function PublicGalleryDirectory() {
         isOpen={cartModalOpen}
         onClose={() => setCartModalOpen(false)}
         galleries={galleries}
+        onNavigate={onNavigate}
       />
     </div>
   )
 }
 
-export default function GalleryStudio({ mode, token = '' }: { mode: 'admin' | 'gallery' | 'directory'; token?: string }) {
+export default function GalleryStudio({
+  mode,
+  token = '',
+  onNavigate,
+}: {
+  mode: 'admin' | 'gallery' | 'directory'
+  token?: string
+  onNavigate?: (path: string) => void
+}) {
   const [authReady, setAuthReady] = useState(usingDemoGalleryStore)
   const [signedIn, setSignedIn] = useState(usingDemoGalleryStore)
 
@@ -2278,8 +2354,8 @@ export default function GalleryStudio({ mode, token = '' }: { mode: 'admin' | 'g
     }
   }, [])
 
-  if (mode === 'gallery') return <PublicGallery token={token} />
-  if (mode === 'directory') return <PublicGalleryDirectory />
+  if (mode === 'gallery') return <PublicGallery token={token} onNavigate={onNavigate} />
+  if (mode === 'directory') return <PublicGalleryDirectory onNavigate={onNavigate} />
   if (!supabase && !usingDemoGalleryStore) {
     return <main className="gallery-client__state"><h1>Panel no disponible</h1><p>La conexión segura no está configurada. Contactá al administrador del sitio.</p></main>
   }

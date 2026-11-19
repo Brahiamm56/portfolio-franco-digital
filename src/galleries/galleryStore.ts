@@ -11,6 +11,27 @@ const photoExtensions: Record<string, string> = {
   'image/webp': 'webp',
 }
 
+const PUBLISHED_CACHE_TTL = 5 * 60 * 1000 // 5 minutos de caché en memoria para navegación instantánea
+
+interface CacheEntry<T> {
+  data: T
+  timestamp: number
+}
+
+const publishedGalleryCache = new Map<string, CacheEntry<PublicPhotoGallery>>()
+const publishedGalleryPromises = new Map<string, Promise<PublicPhotoGallery | null>>()
+let publishedListCache: CacheEntry<PublishedGalleryLink[]> | null = null
+let publishedListPromise: Promise<PublishedGalleryLink[]> | null = null
+
+export function invalidatePublishedGalleryCaches(token?: string) {
+  if (token) {
+    publishedGalleryCache.delete(token)
+  } else {
+    publishedGalleryCache.clear()
+  }
+  publishedListCache = null
+}
+
 export type GalleryStatus = 'draft' | 'published'
 
 export type GalleryPhoto = {
@@ -453,6 +474,7 @@ export async function createGallery(input: {
 }
 
 export async function setGalleryCoverPhoto(galleryId: string, photoId: string) {
+  invalidatePublishedGalleryCaches()
   if (typeof window !== 'undefined') {
     localStorage.setItem(`gallery-cover-${galleryId}`, photoId)
   }
@@ -896,6 +918,7 @@ export function getGalleryDownloadSetting(galleryId: string): boolean {
 }
 
 export async function setGalleryStatus(galleryId: string, status: GalleryStatus) {
+  invalidatePublishedGalleryCaches()
   if (!supabase && usingDemoGalleryStore) {
     const galleries = readLocalGalleries()
     const gallery = galleries.find((item) => item.id === galleryId)
@@ -911,6 +934,7 @@ export async function setGalleryStatus(galleryId: string, status: GalleryStatus)
 }
 
 export async function deleteGallery(galleryId: string) {
+  invalidatePublishedGalleryCaches()
   if (!supabase && usingDemoGalleryStore) {
     const galleries = readLocalGalleries()
     const gallery = galleries.find((item) => item.id === galleryId)
@@ -1021,98 +1045,126 @@ export async function deleteGallery(galleryId: string) {
   }
 }
 
-export async function getPublishedGallery(shareToken: string): Promise<PublicPhotoGallery | null> {
-  if (!supabase && usingDemoGalleryStore) {
-    const gallery = readLocalGalleries().find((item) => item.shareToken === shareToken && item.status === 'published')
-    if (!gallery) return null
-    const photos = await Promise.all(gallery.photos.map(async (photo) => {
-      const asset = await getDemoAsset(photo.id)
-      let hasWatermark = typeof photo.hasWatermark === 'boolean'
-        ? photo.hasWatermark
-        : !photo.filename.includes('[SIN_MARCA]')
-      if (typeof window !== 'undefined') {
-        const cached = localStorage.getItem(`gallery-photo-wm-${photo.id}`)
-        if (cached !== null) {
-          hasWatermark = cached === '1'
-        }
-      }
-      let allowDownload = photo.filename.includes('[DESCARGA]')
-      if (typeof window !== 'undefined') {
-        const dlCached = localStorage.getItem(`gallery-photo-dl-${photo.id}`)
-        if (dlCached !== null) allowDownload = dlCached === '1'
-        else {
-          const galleryAll = localStorage.getItem(`gallery-dl-all-${gallery.id}`)
-          if (galleryAll !== null) allowDownload = galleryAll === '1'
-        }
-      }
-      return {
-        id: photo.id,
-        filename: cleanPhotoFilename(photo.filename),
-        priceArs: photo.priceArs,
-        hasWatermark,
-        allowDownload,
-        url: asset ? URL.createObjectURL(asset) : '',
-      }
-    }))
-    const coverPhoto = resolveGalleryCoverPhoto(photos, gallery.coverPhotoId)
-    return {
-      id: gallery.id,
-      title: gallery.title,
-      clientName: gallery.clientName,
-      eventDate: gallery.eventDate,
-      clientSelectedPhotoIds: gallery.clientSelectedPhotoIds ?? [],
-      coverPhotoId: coverPhoto?.id ?? null,
-      coverPhotoUrl: coverPhoto?.url ?? null,
-      photos,
-    }
+export async function getPublishedGallery(shareToken: string, forceFresh = false): Promise<PublicPhotoGallery | null> {
+  const cached = publishedGalleryCache.get(shareToken)
+  const now = Date.now()
+  if (!forceFresh && cached && now - cached.timestamp < PUBLISHED_CACHE_TTL) {
+    return cached.data
   }
-  ensureSupabaseConfigured()
 
-  const { data, error } = await supabase!.functions.invoke('public-gallery', { body: { token: shareToken } })
-  if (error) throw error
-  const rawGallery = data?.gallery
-  if (!rawGallery) return null
+  // Deduplicar solicitudes simultáneas al mismo evento
+  if (!forceFresh && publishedGalleryPromises.has(shareToken)) {
+    return publishedGalleryPromises.get(shareToken)!
+  }
 
-  const rawPhotos = (rawGallery.photos ?? []) as Array<{ id: string; filename: string; priceArs: number; url: string; hasWatermark?: boolean; allowDownload?: boolean }>
-  const photos = rawPhotos.map((p) => {
-    const rawName = String(p.filename ?? '')
-    let hasWatermark = typeof p.hasWatermark === 'boolean'
-      ? p.hasWatermark
-      : !rawName.includes('[SIN_MARCA]')
-    if (typeof window !== 'undefined') {
-      const cached = localStorage.getItem(`gallery-photo-wm-${p.id}`)
-      if (cached !== null) {
-        hasWatermark = cached === '1'
+  const fetchPromise = (async () => {
+    try {
+      if (!supabase && usingDemoGalleryStore) {
+        const gallery = readLocalGalleries().find((item) => item.shareToken === shareToken && item.status === 'published')
+        if (!gallery) return null
+        const photos = await Promise.all(gallery.photos.map(async (photo) => {
+          const asset = await getDemoAsset(photo.id)
+          let hasWatermark = typeof photo.hasWatermark === 'boolean'
+            ? photo.hasWatermark
+            : !photo.filename.includes('[SIN_MARCA]')
+          if (typeof window !== 'undefined') {
+            const wmCached = localStorage.getItem(`gallery-photo-wm-${photo.id}`)
+            if (wmCached !== null) {
+              hasWatermark = wmCached === '1'
+            }
+          }
+          let allowDownload = photo.filename.includes('[DESCARGA]')
+          if (typeof window !== 'undefined') {
+            const dlCached = localStorage.getItem(`gallery-photo-dl-${photo.id}`)
+            if (dlCached !== null) allowDownload = dlCached === '1'
+            else {
+              const galleryAll = localStorage.getItem(`gallery-dl-all-${gallery.id}`)
+              if (galleryAll !== null) allowDownload = galleryAll === '1'
+            }
+          }
+          return {
+            id: photo.id,
+            filename: cleanPhotoFilename(photo.filename),
+            priceArs: photo.priceArs,
+            hasWatermark,
+            allowDownload,
+            url: asset ? URL.createObjectURL(asset) : '',
+          }
+        }))
+        const coverPhoto = resolveGalleryCoverPhoto(photos, gallery.coverPhotoId)
+        const result: PublicPhotoGallery = {
+          id: gallery.id,
+          title: gallery.title,
+          clientName: gallery.clientName,
+          eventDate: gallery.eventDate,
+          clientSelectedPhotoIds: gallery.clientSelectedPhotoIds ?? [],
+          coverPhotoId: coverPhoto?.id ?? null,
+          coverPhotoUrl: coverPhoto?.url ?? null,
+          photos,
+        }
+        publishedGalleryCache.set(shareToken, { data: result, timestamp: Date.now() })
+        return result
       }
-    }
-    let allowDownload = typeof p.allowDownload === 'boolean'
-      ? p.allowDownload
-      : rawName.includes('[DESCARGA]')
-    if (typeof window !== 'undefined') {
-      const dlCached = localStorage.getItem(`gallery-photo-dl-${p.id}`)
-      if (dlCached !== null) allowDownload = dlCached === '1'
-      else {
-        const galleryAll = localStorage.getItem(`gallery-dl-all-${rawGallery.id}`)
-        if (galleryAll !== null) allowDownload = galleryAll === '1'
-      }
-    }
-    return {
-      ...p,
-      hasWatermark,
-      allowDownload,
-      filename: cleanPhotoFilename(rawName),
-    }
-  })
 
-  const localCover = typeof window !== 'undefined' ? localStorage.getItem(`gallery-cover-${rawGallery.id}`) : null
-  const coverPhoto = resolveGalleryCoverPhoto(photos, (rawGallery.coverPhotoId as string) || localCover)
+      ensureSupabaseConfigured()
 
-  return {
-    ...rawGallery,
-    coverPhotoId: coverPhoto?.id ?? null,
-    coverPhotoUrl: coverPhoto?.url ?? null,
-    photos,
-  } as PublicPhotoGallery
+      const { data, error } = await supabase!.functions.invoke('public-gallery', { body: { token: shareToken } })
+      if (error) throw error
+      const rawGallery = data?.gallery
+      if (!rawGallery) return null
+
+      const rawPhotos = (rawGallery.photos ?? []) as Array<{ id: string; filename: string; priceArs: number; url: string; hasWatermark?: boolean; allowDownload?: boolean }>
+      const photos = rawPhotos.map((p) => {
+        const rawName = String(p.filename ?? '')
+        let hasWatermark = typeof p.hasWatermark === 'boolean'
+          ? p.hasWatermark
+          : !rawName.includes('[SIN_MARCA]')
+        if (typeof window !== 'undefined') {
+          const wmCached = localStorage.getItem(`gallery-photo-wm-${p.id}`)
+          if (wmCached !== null) {
+            hasWatermark = wmCached === '1'
+          }
+        }
+        let allowDownload = typeof p.allowDownload === 'boolean'
+          ? p.allowDownload
+          : rawName.includes('[DESCARGA]')
+        if (typeof window !== 'undefined') {
+          const dlCached = localStorage.getItem(`gallery-photo-dl-${p.id}`)
+          if (dlCached !== null) allowDownload = dlCached === '1'
+          else {
+            const galleryAll = localStorage.getItem(`gallery-dl-all-${rawGallery.id}`)
+            if (galleryAll !== null) allowDownload = galleryAll === '1'
+          }
+        }
+        return {
+          ...p,
+          hasWatermark,
+          allowDownload,
+          filename: cleanPhotoFilename(rawName),
+        }
+      })
+
+      const localCover = typeof window !== 'undefined' ? localStorage.getItem(`gallery-cover-${rawGallery.id}`) : null
+      const coverPhoto = resolveGalleryCoverPhoto(photos, (rawGallery.coverPhotoId as string) || localCover)
+
+      const rawSelected = (rawGallery.clientSelectedPhotoIds as string[]) ?? (rawGallery.client_selected_photo_ids as string[]) ?? []
+      const result: PublicPhotoGallery = {
+        ...rawGallery,
+        clientSelectedPhotoIds: rawSelected,
+        coverPhotoId: coverPhoto?.id ?? null,
+        coverPhotoUrl: coverPhoto?.url ?? null,
+        photos,
+      } as PublicPhotoGallery
+
+      publishedGalleryCache.set(shareToken, { data: result, timestamp: Date.now() })
+      return result
+    } finally {
+      publishedGalleryPromises.delete(shareToken)
+    }
+  })()
+
+  publishedGalleryPromises.set(shareToken, fetchPromise)
+  return fetchPromise
 }
 
 export async function refreshGalleryPhotosForExport(galleryId: string): Promise<GalleryPhoto[]> {
@@ -1146,6 +1198,18 @@ export async function saveGalleryPhotoSelections(shareToken: string, photoIds: s
     throw new Error('La selección de fotos no es válida.')
   }
 
+  // Actualizar inmediatamente la caché en memoria y localStorage para reactividad sin latencia
+  const cached = publishedGalleryCache.get(shareToken)
+  if (cached) {
+    cached.data.clientSelectedPhotoIds = uniquePhotoIds
+  }
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(`gallery-selected-${shareToken}`, JSON.stringify(uniquePhotoIds))
+    window.dispatchEvent(new CustomEvent('gallery-selection-changed', {
+      detail: { shareToken, photoIds: uniquePhotoIds }
+    }))
+  }
+
   if (!supabase && usingDemoGalleryStore) {
     const galleries = readLocalGalleries()
     const gallery = galleries.find((item) => item.shareToken === shareToken && item.status === 'published')
@@ -1165,53 +1229,76 @@ export async function saveGalleryPhotoSelections(shareToken: string, photoIds: s
   if (error) throw error
 }
 
-export async function listPublishedGalleries(): Promise<PublishedGalleryLink[]> {
-  if (!supabase && usingDemoGalleryStore) {
-    return Promise.all(
-      readLocalGalleries()
-        .filter((gallery) => gallery.status === 'published')
-        .map(async ({ id, title, clientName, eventDate, shareToken, createdAt, photos, coverPhotoId }) => {
-          const loadedPhotos = await Promise.all(photos.map(async (photo) => {
-            const asset = await getDemoAsset(photo.id)
-            return { id: photo.id, url: asset ? URL.createObjectURL(asset) : '', filename: photo.filename }
-          }))
-          const cover = resolveGalleryCoverPhoto(loadedPhotos, coverPhotoId)
-          const previewPhotos = cover
-            ? [cover, ...loadedPhotos.filter((p) => p.id !== cover.id)].slice(0, 4)
-            : loadedPhotos.slice(0, 4)
-          return {
-            id,
-            title,
-            clientName,
-            eventDate,
-            shareToken,
-            createdAt,
-            photoCount: photos.length,
-            coverPhotoUrl: cover?.url ?? null,
-            previewPhotos,
-          }
-        }),
-    )
+export async function listPublishedGalleries(forceFresh = false): Promise<PublishedGalleryLink[]> {
+  const now = Date.now()
+  if (!forceFresh && publishedListCache && now - publishedListCache.timestamp < PUBLISHED_CACHE_TTL) {
+    return publishedListCache.data
   }
-  ensureSupabaseConfigured()
 
-  const { data, error } = await supabase!.functions.invoke('public-gallery', { body: { action: 'list' } })
-  if (error) throw error
-  const galleries = (data?.galleries ?? []) as Array<PublishedGalleryLink & Record<string, unknown>>
-  return galleries.map((gallery) => {
-    const localCover = typeof window !== 'undefined' ? localStorage.getItem(`gallery-cover-${gallery.id}`) : null
-    const cover = resolveGalleryCoverPhoto(gallery.previewPhotos, localCover)
-    const previewPhotos = cover
-      ? [cover, ...gallery.previewPhotos.filter((p) => p.id !== cover.id)]
-      : gallery.previewPhotos
-    return {
-      ...gallery,
-      clientName: gallery.clientName || (gallery.client_name as string) || undefined,
-      photoCount: typeof gallery.photoCount === 'number' ? gallery.photoCount : (typeof gallery.photo_count === 'number' ? gallery.photo_count : undefined),
-      coverPhotoUrl: cover?.url ?? previewPhotos[0]?.url ?? null,
-      previewPhotos,
+  if (!forceFresh && publishedListPromise) {
+    return publishedListPromise
+  }
+
+  const fetchPromise = (async () => {
+    try {
+      if (!supabase && usingDemoGalleryStore) {
+        const links = await Promise.all(
+          readLocalGalleries()
+            .filter((gallery) => gallery.status === 'published')
+            .map(async ({ id, title, clientName, eventDate, shareToken, createdAt, photos, coverPhotoId }) => {
+              const loadedPhotos = await Promise.all(photos.map(async (photo) => {
+                const asset = await getDemoAsset(photo.id)
+                return { id: photo.id, url: asset ? URL.createObjectURL(asset) : '', filename: photo.filename }
+              }))
+              const cover = resolveGalleryCoverPhoto(loadedPhotos, coverPhotoId)
+              const previewPhotos = cover
+                ? [cover, ...loadedPhotos.filter((p) => p.id !== cover.id)].slice(0, 4)
+                : loadedPhotos.slice(0, 4)
+              return {
+                id,
+                title,
+                clientName,
+                eventDate,
+                shareToken,
+                createdAt,
+                photoCount: photos.length,
+                coverPhotoUrl: cover?.url ?? null,
+                previewPhotos,
+              }
+            }),
+        )
+        publishedListCache = { data: links, timestamp: Date.now() }
+        return links
+      }
+
+      ensureSupabaseConfigured()
+
+      const { data, error } = await supabase!.functions.invoke('public-gallery', { body: { action: 'list' } })
+      if (error) throw error
+      const galleries = (data?.galleries ?? []) as Array<PublishedGalleryLink & Record<string, unknown>>
+      const links = galleries.map((gallery) => {
+        const localCover = typeof window !== 'undefined' ? localStorage.getItem(`gallery-cover-${gallery.id}`) : null
+        const cover = resolveGalleryCoverPhoto(gallery.previewPhotos, localCover)
+        const previewPhotos = cover
+          ? [cover, ...gallery.previewPhotos.filter((p) => p.id !== cover.id)]
+          : gallery.previewPhotos
+        return {
+          ...gallery,
+          clientName: gallery.clientName || (gallery.client_name as string) || undefined,
+          photoCount: typeof gallery.photoCount === 'number' ? gallery.photoCount : (typeof gallery.photo_count === 'number' ? gallery.photo_count : undefined),
+          coverPhotoUrl: cover?.url ?? previewPhotos[0]?.url ?? null,
+          previewPhotos,
+        }
+      })
+      publishedListCache = { data: links, timestamp: Date.now() }
+      return links
+    } finally {
+      publishedListPromise = null
     }
-  })
+  })()
+
+  publishedListPromise = fetchPromise
+  return fetchPromise
 }
 
 export function galleryShareUrl(shareToken: string) {

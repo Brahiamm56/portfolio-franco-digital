@@ -320,8 +320,8 @@
 .public-event-card__img { display: block; width: 100%; height: 100%; object-fit: cover; transition: transform 550ms cubic-bezier(.2,.8,.2,1); }
 .public-event-card__link:hover .public-event-card__img { transform: scale(1.045); }
 .public-event-card__placeholder { display: grid; width: 100%; height: 100%; place-content: center; background: #15181a; }
-.public-event-card__badge-new { position: absolute; top: .85rem; left: .85rem; z-index: 2; padding: .28rem .8rem; border-radius: 999px; background: #ffffff; color: #08090a; font-family: 'Space Grotesk', sans-serif; font-size: .68rem; font-weight: 700; letter-spacing: .02em; box-shadow: 0 4px 14px rgba(0,0,0,.45); }
-.public-event-card__badge-count { position: absolute; bottom: .85rem; right: .85rem; z-index: 2; display: flex; align-items: center; gap: .4rem; padding: .32rem .75rem; border-radius: 999px; background: rgba(14,16,19,.84); border: 1px solid rgba(255,255,255,.18); color: #ffffff; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); font-family: 'Space Grotesk', sans-serif; font-size: .68rem; font-weight: 600; box-shadow: 0 4px 16px rgba(0,0,0,.45); }
+.public-event-card__badge-new { position: absolute; top: .85rem; left: .85rem; z-index: 2; padding: .26rem .75rem; border-radius: 999px; background: rgba(242, 22, 50, 0.92); color: #ffffff; font-family: 'Space Grotesk', sans-serif; font-size: .62rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; border: 1px solid rgba(255,255,255,.2); box-shadow: 0 4px 16px rgba(242,22,50,.35); backdrop-filter: blur(8px); }
+.public-event-card__badge-count { position: absolute; bottom: .85rem; right: .85rem; z-index: 2; display: flex; align-items: center; gap: .4rem; padding: .32rem .75rem; border-radius: 999px; background: rgba(12,14,16,.85); border: 1px solid rgba(255,255,255,.18); color: #ffffff; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); font-family: 'Space Grotesk', sans-serif; font-size: .68rem; font-weight: 600; box-shadow: 0 4px 16px rgba(0,0,0,.45); }
 .public-event-card__camera-icon { width: .85rem; height: .85rem; color: #fff; flex: 0 0 auto; }
 .public-event-card__body { padding-top: .85rem; }
 .public-event-card__title { margin: 0 0 .3rem; color: #ffffff; font-family: 'Space Grotesk', sans-serif; font-size: 1.12rem; font-weight: 700; line-height: 1.35; letter-spacing: -.01em; }
@@ -374,6 +374,19 @@
 .gallery-client__image-button:hover .gallery-client__photo-img.is-visible { opacity: 1; transform: scale(1.025); }
 
 /* Skeleton shimmer animado mientras carga la foto */
+.gallery-client.is-skeleton-state { min-height: 100vh; }
+.gallery-client__hero--skeleton { pointer-events: none; background: #101214; }
+.gallery-client__hero--skeleton .gallery-client__hero-media { background: #14171a; position: relative; }
+.gallery-client__skeleton-shimmer { position: absolute; inset: 0; transform: translateX(-100%); background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,.04) 50%, transparent 100%); animation: gallery-skeleton-sweep 1.8s infinite ease-in-out; }
+@keyframes gallery-skeleton-sweep { 100% { transform: translateX(100%); } }
+.gallery-client__skeleton-line { position: relative; overflow: hidden; border-radius: 8px; background: rgba(255,255,255,.06); }
+.gallery-client__skeleton-line::after { content: ''; position: absolute; inset: 0; transform: translateX(-100%); background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,.08) 50%, transparent 100%); animation: gallery-skeleton-sweep 1.8s infinite ease-in-out; }
+.gallery-client__skeleton-line--client { width: min(220px, 45%); height: 16px; margin-bottom: .5rem; }
+.gallery-client__skeleton-line--title { width: min(440px, 78%); height: clamp(32px, 6vw, 48px); margin-bottom: .75rem; }
+.gallery-client__hero-loading-badge { display: inline-flex; align-items: center; gap: .65rem; color: #989a9b; font-family: 'Space Grotesk', sans-serif; font-size: .74rem; letter-spacing: .04em; }
+.gallery-client__hero-loading-badge .gallery-spinner { width: 18px; height: 18px; border-width: 2px; }
+.gallery-client__photo.is-skeleton-card { pointer-events: none; aspect-ratio: 1 / 1; min-height: 280px; }
+
 .gallery-client__photo-skeleton { position: absolute; inset: 0; width: 100%; height: 100%; min-height: 280px; background: #15181b; display: grid; place-items: center; overflow: hidden; z-index: 1; }
 .gallery-client__photo-shimmer { position: absolute; inset: 0; transform: translateX(-100%); background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,.05) 50%, transparent 100%); animation: gallery-photo-shimmer 1.8s infinite; }
 @keyframes gallery-photo-shimmer { 100% { transform: translateX(100%); } }

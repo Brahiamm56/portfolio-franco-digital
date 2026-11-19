@@ -122,19 +122,55 @@ function Intro({ onComplete }: { onComplete: () => void }) {
 
 function ProjectCard({ project, index, navigate }: { project: Project; index: number; navigate: Navigate }) {
   const [activeImage, setActiveImage] = useState(0)
+  const [isVisible, setIsVisible] = useState(false)
+  const cardRef = useRef<HTMLAnchorElement>(null)
 
   useEffect(() => {
+    const element = cardRef.current
+    if (!element) return
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setIsVisible(entry?.isIntersecting ?? false)
+      },
+      { rootMargin: '120px 0px', threshold: 0.05 }
+    )
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [])
+
+  useEffect(() => {
+    if (!isVisible) return
     const nextImage = new Image()
     nextImage.decoding = 'async'
     nextImage.src = project.images[(activeImage + 1) % project.images.length]
-  }, [activeImage, project.images])
+  }, [activeImage, isVisible, project.images])
 
   useEffect(() => {
-    const timer = window.setInterval(() => {
-      setActiveImage((current) => (current + 1) % project.images.length)
-    }, 3000 + (index % 3) * 360)
-    return () => window.clearInterval(timer)
-  }, [index, project.images.length])
+    if (!isVisible) return
+
+    let timer = 0
+    const startTimer = () => {
+      window.clearInterval(timer)
+      if (document.visibilityState === 'visible') {
+        timer = window.setInterval(() => {
+          setActiveImage((current) => (current + 1) % project.images.length)
+        }, 3400 + (index % 3) * 360)
+      }
+    }
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') startTimer()
+      else window.clearInterval(timer)
+    }
+
+    startTimer()
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => {
+      window.clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    }
+  }, [index, isVisible, project.images.length])
 
   const openProject = (event: MouseEvent<HTMLAnchorElement>) => {
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
@@ -146,7 +182,7 @@ function ProjectCard({ project, index, navigate }: { project: Project; index: nu
   }
 
   return (
-    <a className="project-card" href={`/proyectos/${project.slug}`} onClick={openProject} data-reveal>
+    <a ref={cardRef} className="project-card" href={`/proyectos/${project.slug}`} onClick={openProject} data-reveal>
       <div className="project-art">
         <div className="project-art__slides">
           {project.images.map((image, imageIndex) => (
@@ -566,7 +602,7 @@ function App() {
     <main className={`site-shell ${adminRoute ? 'site-shell--photo-app' : ''}`} ref={rootRef}>
       {adminRoute ? (
         <Suspense fallback={<div className="route-view"><p className="eyebrow">ARCHIVO PRIVADO</p><p>Abriendo la galería…</p></div>}>
-          <GalleryStudio mode="admin" />
+          <GalleryStudio mode="admin" onNavigate={navigate} />
         </Suspense>
       ) : <>
       {!introComplete && <Intro onComplete={() => setIntroComplete(true)} />}
@@ -607,9 +643,9 @@ function App() {
       </div>
 
       {pathname === '/' ? <HomePage navigate={navigate} /> : activeProject ? <ProjectDetail project={activeProject} navigate={navigate} /> : pathname.startsWith('/galeria/') ? (
-        <Suspense fallback={<div className="route-view"><p className="eyebrow">ARCHIVO PRIVADO</p><p>Abriendo la galería…</p></div>}><GalleryStudio mode="gallery" token={sharedGalleryToken} /></Suspense>
+        <Suspense fallback={<div className="route-view"><p className="eyebrow">ARCHIVO PRIVADO</p><p>Abriendo la galería…</p></div>}><GalleryStudio mode="gallery" token={sharedGalleryToken} onNavigate={navigate} /></Suspense>
       ) : pathname === '/galerias' ? (
-        <Suspense fallback={<div className="route-view"><p className="eyebrow">ARCHIVO PÚBLICO</p><p>Cargando galerías…</p></div>}><GalleryStudio mode="directory" /></Suspense>
+        <Suspense fallback={<div className="route-view"><p className="eyebrow">ARCHIVO PÚBLICO</p><p>Cargando galerías…</p></div>}><GalleryStudio mode="directory" onNavigate={navigate} /></Suspense>
       ) : (
         <section className="route-view not-found"><p className="eyebrow">Error 404</p><h1>Esta página<br /><em>no existe.</em></h1><a className="text-link" href="/" onClick={internalLink('/')}><span>Volver al inicio</span><span>→</span></a></section>
       )}
