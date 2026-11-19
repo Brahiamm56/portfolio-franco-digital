@@ -222,8 +222,8 @@ const handleRequest = withSupabase({ auth: 'publishable' }, async (request, cont
       : !rawName.includes('[SIN_MARCA]')
     const allowDownload = typeof photoRecord.allow_download === 'boolean'
       ? Boolean(photoRecord.allow_download)
-      : rawName.includes('[DESCARGA]')
-    const cleanFilename = rawName.replace(/^(\[(?:PORTADA|SIN_MARCA|DESCARGA)\]\s*)+/i, '').trim()
+      : !rawName.includes('[SIN_DESCARGA]')
+    const cleanFilename = rawName.replace(/^(\[(?:PORTADA|SIN_MARCA|DESCARGA|SIN_DESCARGA)\]\s*)+/i, '').trim()
     return {
       id: photo.id,
       filename: cleanFilename,

@@ -1249,6 +1249,59 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
   )
 }
 
+async function downloadPhotoAsset(url: string, rawFilename: string): Promise<boolean> {
+  const fileName = cleanPhotoFilename(rawFilename) || 'foto.jpg'
+  try {
+    const response = await fetch(url)
+    if (!response.ok) throw new Error('Fetch failed')
+    const blob = await response.blob()
+
+    // En iOS Safari / iPhone con Web Share API de archivos:
+    // Permite guardar directamente a la app Fotos (Carrete) o Archivos
+    if (typeof navigator !== 'undefined' && typeof navigator.share === 'function' && typeof navigator.canShare === 'function') {
+      try {
+        const file = new File([blob], fileName, { type: blob.type || 'image/jpeg' })
+        if (navigator.canShare({ files: [file] })) {
+          await navigator.share({
+            files: [file],
+            title: fileName,
+          })
+          return true
+        }
+      } catch (shareErr) {
+        if (shareErr instanceof Error && shareErr.name === 'AbortError') {
+          return true
+        }
+      }
+    }
+
+    const blobUrl = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = blobUrl
+    a.download = fileName
+    a.rel = 'noopener noreferrer'
+    document.body.appendChild(a)
+    a.click()
+    setTimeout(() => {
+      document.body.removeChild(a)
+      URL.revokeObjectURL(blobUrl)
+    }, 5000)
+    return true
+  } catch {
+    const a = document.createElement('a')
+    a.href = url
+    a.target = '_blank'
+    a.download = fileName
+    a.rel = 'noopener noreferrer'
+    document.body.appendChild(a)
+    a.click()
+    setTimeout(() => {
+      document.body.removeChild(a)
+    }, 1500)
+    return false
+  }
+}
+
 function PublicPhotoItem({
   photo,
   index,
@@ -1266,36 +1319,17 @@ function PublicPhotoItem({
 }) {
   const [loaded, setLoaded] = useState(false)
   const [hasError, setHasError] = useState(false)
+  const [isDownloading, setIsDownloading] = useState(false)
 
   const handleDownload = async (e: React.MouseEvent) => {
     e.stopPropagation()
-    const fileName = cleanPhotoFilename(photo.filename) || `foto-${index + 1}.jpg`
+    if (isDownloading) return
+    setIsDownloading(true)
     try {
-      const response = await fetch(photo.url)
-      if (!response.ok) throw new Error('Fetch failed')
-      const blob = await response.blob()
-      const blobUrl = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = blobUrl
-      a.download = fileName
-      a.rel = 'noopener noreferrer'
-      document.body.appendChild(a)
-      a.click()
-      setTimeout(() => {
-        document.body.removeChild(a)
-        URL.revokeObjectURL(blobUrl)
-      }, 5000)
-    } catch {
-      const a = document.createElement('a')
-      a.href = photo.url
-      a.target = '_blank'
-      a.download = fileName
-      a.rel = 'noopener noreferrer'
-      document.body.appendChild(a)
-      a.click()
-      setTimeout(() => {
-        document.body.removeChild(a)
-      }, 1500)
+      const fileName = cleanPhotoFilename(photo.filename) || `foto-${index + 1}.jpg`
+      await downloadPhotoAsset(photo.url, fileName)
+    } finally {
+      setTimeout(() => setIsDownloading(false), 800)
     }
   }
 
@@ -1342,12 +1376,12 @@ function PublicPhotoItem({
       {photo.allowDownload && (
         <button
           type="button"
-          className="gallery-client__download-btn"
+          className={`gallery-client__download-btn ${isDownloading ? 'is-downloading' : ''}`}
           onClick={handleDownload}
           aria-label={`Descargar foto ${index + 1}`}
           title="Descargar foto"
         >
-          <RiDownloadLine />
+          {isDownloading ? <span className="gallery-spinner" /> : <RiDownloadLine />}
         </button>
       )}
       <span className="gallery-client__photo-price">
@@ -1558,6 +1592,7 @@ function PublicGallery({ token, onNavigate }: { token: string; onNavigate?: (pat
   const [unavailable, setUnavailable] = useState(false)
   const [selectionError, setSelectionError] = useState('')
   const [cartSheetOpen, setCartSheetOpen] = useState(false)
+  const [isDownloadingLightbox, setIsDownloadingLightbox] = useState(false)
   const selectionQueue = useRef(Promise.resolve())
 
   const handleBack = (e: React.MouseEvent) => {
@@ -1593,6 +1628,19 @@ function PublicGallery({ token, onNavigate }: { token: string; onNavigate?: (pat
       return (current + step + gallery.photos.length) % gallery.photos.length
     })
   }, [gallery])
+
+  const handleLightboxDownload = useCallback(async () => {
+    if (previewIndex === null || !gallery || isDownloadingLightbox) return
+    const currentPhoto = gallery.photos[previewIndex]
+    if (!currentPhoto) return
+    setIsDownloadingLightbox(true)
+    try {
+      const fileName = cleanPhotoFilename(currentPhoto.filename) || `foto-${previewIndex + 1}.jpg`
+      await downloadPhotoAsset(currentPhoto.url, fileName)
+    } finally {
+      setTimeout(() => setIsDownloadingLightbox(false), 800)
+    }
+  }, [previewIndex, gallery, isDownloadingLightbox])
 
   // Precarga silenciosa en lightbox de la foto anterior y siguiente para navegación instantánea
   useEffect(() => {
@@ -1758,7 +1806,21 @@ function PublicGallery({ token, onNavigate }: { token: string; onNavigate?: (pat
               onMouseDown={(event) => { if (event.target === event.currentTarget) setPreviewIndex(null) }}
             >
               <section className="gallery-lightbox__dialog" role="dialog" aria-modal="true" aria-label={`Vista previa de la foto ${previewIndex + 1}`}>
-                <button className="gallery-lightbox__close" type="button" onClick={() => setPreviewIndex(null)} aria-label="Cerrar vista previa">×</button>
+                <div className="gallery-lightbox__top-actions">
+                  {gallery.photos[previewIndex].allowDownload && (
+                    <button
+                      type="button"
+                      className={`gallery-lightbox__top-download ${isDownloadingLightbox ? 'is-downloading' : ''}`}
+                      onClick={handleLightboxDownload}
+                      aria-label="Descargar foto"
+                      title="Descargar foto"
+                    >
+                      {isDownloadingLightbox ? <span className="gallery-spinner" /> : <RiDownloadLine />}
+                      <span>Descargar</span>
+                    </button>
+                  )}
+                  <button className="gallery-lightbox__close" type="button" onClick={() => setPreviewIndex(null)} aria-label="Cerrar vista previa">✕</button>
+                </div>
                 {gallery.photos.length > 1 && (
                   <button className="gallery-lightbox__nav gallery-lightbox__nav--previous" type="button" onClick={() => navigatePreview(-1)} aria-label="Foto anterior">‹</button>
                 )}
@@ -1787,42 +1849,12 @@ function PublicGallery({ token, onNavigate }: { token: string; onNavigate?: (pat
                     {gallery.photos[previewIndex].allowDownload && (
                       <button
                         type="button"
-                        className="gallery-lightbox__download-btn"
+                        className={`gallery-lightbox__download-btn ${isDownloadingLightbox ? 'is-downloading' : ''}`}
                         aria-label="Descargar foto"
                         title="Descargar foto"
-                        onClick={async () => {
-                          const currentPhoto = gallery.photos[previewIndex]
-                          const fileName = cleanPhotoFilename(currentPhoto.filename) || `foto-${previewIndex + 1}.jpg`
-                          try {
-                            const response = await fetch(currentPhoto.url)
-                            if (!response.ok) throw new Error('Fetch failed')
-                            const blob = await response.blob()
-                            const blobUrl = URL.createObjectURL(blob)
-                            const a = document.createElement('a')
-                            a.href = blobUrl
-                            a.download = fileName
-                            a.rel = 'noopener noreferrer'
-                            document.body.appendChild(a)
-                            a.click()
-                            setTimeout(() => {
-                              document.body.removeChild(a)
-                              URL.revokeObjectURL(blobUrl)
-                            }, 5000)
-                          } catch {
-                            const a = document.createElement('a')
-                            a.href = currentPhoto.url
-                            a.target = '_blank'
-                            a.download = fileName
-                            a.rel = 'noopener noreferrer'
-                            document.body.appendChild(a)
-                            a.click()
-                            setTimeout(() => {
-                              document.body.removeChild(a)
-                            }, 1500)
-                          }
-                        }}
+                        onClick={handleLightboxDownload}
                       >
-                        <RiDownloadLine />
+                        {isDownloadingLightbox ? <span className="gallery-spinner" /> : <RiDownloadLine />}
                         <span>Descargar</span>
                       </button>
                     )}

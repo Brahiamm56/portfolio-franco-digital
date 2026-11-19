@@ -57,7 +57,7 @@ export function isPhotoWatermarkEnabled(photo: {
 }
 
 export function cleanPhotoFilename(name: string): string {
-  return name.replace(/^(\[(?:PORTADA|SIN_MARCA|DESCARGA)\]\s*)+/gi, '').trim()
+  return name.replace(/^(\[(?:PORTADA|SIN_MARCA|DESCARGA|SIN_DESCARGA)\]\s*)+/gi, '').trim()
 }
 
 export type PhotoGallery = {
@@ -257,7 +257,7 @@ function mapRemotePhoto(photo: Record<string, unknown>, url: string, galleryId?:
 
   let allowDownload = typeof photo.allow_download === 'boolean'
     ? photo.allow_download
-    : rawFilename.includes('[DESCARGA]')
+    : (!rawFilename.includes('[SIN_DESCARGA]'))
   if (typeof window !== 'undefined') {
     const cached = localStorage.getItem(`gallery-photo-dl-${photo.id}`)
     if (cached !== null) {
@@ -593,8 +593,9 @@ export async function addGalleryPhotos(
       const filename = hasWatermark ? optimized.name : `[SIN_MARCA] ${optimized.name}`
       if (typeof window !== 'undefined') {
         localStorage.setItem(`gallery-photo-wm-${id}`, hasWatermark ? '1' : '0')
+        localStorage.setItem(`gallery-photo-dl-${id}`, '1')
       }
-      additions.push({ id, filename, priceArs, storagePath: id, hasWatermark })
+      additions.push({ id, filename, priceArs, storagePath: id, hasWatermark, allowDownload: true })
     }
     gallery.photos.push(...additions)
     writeLocalGalleries(galleries)
@@ -626,6 +627,7 @@ export async function addGalleryPhotos(
       storage_path: storagePath,
       price_ars: priceArs,
       has_watermark: hasWatermark,
+      allow_download: true,
     }
 
     let { data: inserted, error: insertError } = await supabase!
@@ -634,8 +636,13 @@ export async function addGalleryPhotos(
       .select('id')
       .single()
 
-    if (insertError && insertError.message?.includes('has_watermark')) {
-      delete insertPayload.has_watermark
+    if (insertError && (insertError.message?.includes('allow_download') || insertError.message?.includes('has_watermark'))) {
+      if (insertError.message?.includes('allow_download')) {
+        delete insertPayload.allow_download
+      }
+      if (insertError.message?.includes('has_watermark')) {
+        delete insertPayload.has_watermark
+      }
       const retry = await supabase!
         .from('gallery_photos')
         .insert(insertPayload as never)
@@ -790,7 +797,7 @@ export async function setPhotoDownload(photoId: string, allowDownload: boolean):
         const clean = cleanPhotoFilename(photo.filename)
         const isCover = photo.filename.startsWith('[PORTADA]')
         const hasWm = photo.hasWatermark !== false && !photo.filename.includes('[SIN_MARCA]')
-        const prefix = [isCover ? '[PORTADA]' : '', !hasWm ? '[SIN_MARCA]' : '', allowDownload ? '[DESCARGA]' : ''].filter(Boolean).join(' ')
+        const prefix = [isCover ? '[PORTADA]' : '', !hasWm ? '[SIN_MARCA]' : '', allowDownload ? '[DESCARGA]' : '[SIN_DESCARGA]'].filter(Boolean).join(' ')
         photo.filename = prefix ? `${prefix} ${clean}` : clean
         writeLocalGalleries(galleries)
         return
@@ -811,7 +818,7 @@ export async function setPhotoDownload(photoId: string, allowDownload: boolean):
       const clean = cleanPhotoFilename(photo.original_filename)
       const isCover = photo.original_filename.startsWith('[PORTADA]')
       const hasWm = !photo.original_filename.includes('[SIN_MARCA]')
-      const prefix = [isCover ? '[PORTADA]' : '', !hasWm ? '[SIN_MARCA]' : '', allowDownload ? '[DESCARGA]' : ''].filter(Boolean).join(' ')
+      const prefix = [isCover ? '[PORTADA]' : '', !hasWm ? '[SIN_MARCA]' : '', allowDownload ? '[DESCARGA]' : '[SIN_DESCARGA]'].filter(Boolean).join(' ')
       const newFilename = prefix ? `${prefix} ${clean}` : clean
 
       const updatePayload: Record<string, unknown> = {
@@ -862,7 +869,7 @@ export async function setAllGalleryPhotosDownload(
         const clean = cleanPhotoFilename(photo.filename)
         const isCover = photo.filename.startsWith('[PORTADA]')
         const hasWm = photo.hasWatermark !== false && !photo.filename.includes('[SIN_MARCA]')
-        const prefix = [isCover ? '[PORTADA]' : '', !hasWm ? '[SIN_MARCA]' : '', allowDownload ? '[DESCARGA]' : ''].filter(Boolean).join(' ')
+        const prefix = [isCover ? '[PORTADA]' : '', !hasWm ? '[SIN_MARCA]' : '', allowDownload ? '[DESCARGA]' : '[SIN_DESCARGA]'].filter(Boolean).join(' ')
         photo.filename = prefix ? `${prefix} ${clean}` : clean
       }
       writeLocalGalleries(galleries)
@@ -885,7 +892,7 @@ export async function setAllGalleryPhotosDownload(
         const clean = cleanPhotoFilename(photo.original_filename)
         const isCover = photo.original_filename.startsWith('[PORTADA]')
         const hasWm = !photo.original_filename.includes('[SIN_MARCA]')
-        const prefix = [isCover ? '[PORTADA]' : '', !hasWm ? '[SIN_MARCA]' : '', allowDownload ? '[DESCARGA]' : ''].filter(Boolean).join(' ')
+        const prefix = [isCover ? '[PORTADA]' : '', !hasWm ? '[SIN_MARCA]' : '', allowDownload ? '[DESCARGA]' : '[SIN_DESCARGA]'].filter(Boolean).join(' ')
         const newFilename = prefix ? `${prefix} ${clean}` : clean
 
         const updatePayload: Record<string, unknown> = {
@@ -1073,7 +1080,9 @@ export async function getPublishedGallery(shareToken: string, forceFresh = false
               hasWatermark = wmCached === '1'
             }
           }
-          let allowDownload = photo.filename.includes('[DESCARGA]')
+          let allowDownload = typeof photo.allowDownload === 'boolean'
+            ? photo.allowDownload
+            : !photo.filename.includes('[SIN_DESCARGA]')
           if (typeof window !== 'undefined') {
             const dlCached = localStorage.getItem(`gallery-photo-dl-${photo.id}`)
             if (dlCached !== null) allowDownload = dlCached === '1'
@@ -1127,7 +1136,9 @@ export async function getPublishedGallery(shareToken: string, forceFresh = false
         }
         let allowDownload = typeof p.allowDownload === 'boolean'
           ? p.allowDownload
-          : rawName.includes('[DESCARGA]')
+          : (typeof (p as Record<string, unknown>).allow_download === 'boolean'
+            ? Boolean((p as Record<string, unknown>).allow_download)
+            : !rawName.includes('[SIN_DESCARGA]'))
         if (typeof window !== 'undefined') {
           const dlCached = localStorage.getItem(`gallery-photo-dl-${p.id}`)
           if (dlCached !== null) allowDownload = dlCached === '1'

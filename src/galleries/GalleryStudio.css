@@ -495,7 +495,77 @@
 .gallery-lightbox__dialog { position: relative; display: flex; width: min(1100px, 100%); height: min(88vh, 900px); flex-direction: column; align-items: center; justify-content: center; }
 .gallery-lightbox__media { position: relative; display: flex; align-items: center; justify-content: center; width: 100%; height: calc(100% - 48px); max-height: calc(88vh - 48px); overflow: hidden; border-radius: 12px; }
 .gallery-lightbox__media > img { display: block; max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; user-select: none; -webkit-user-drag: none; }
-.gallery-lightbox__close, .gallery-lightbox__nav { position: absolute; z-index: 2; display: grid; width: 2.7rem; height: 2.7rem; place-items: center; border: 1px solid rgba(255,255,255,.34); border-radius: 50%; background: rgba(16,18,20,.74); color: white; cursor: pointer; font-size: 1.6rem; }
+.gallery-lightbox__top-actions {
+  position: absolute;
+  top: max(.8rem, env(safe-area-inset-top, .8rem));
+  right: max(.8rem, env(safe-area-inset-right, .8rem));
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: .65rem;
+}
+.gallery-lightbox__top-actions .gallery-lightbox__close {
+  position: static;
+  display: grid;
+  width: 2.7rem;
+  height: 2.7rem;
+  place-items: center;
+  border: 1px solid rgba(255,255,255,.34);
+  border-radius: 50%;
+  background: rgba(16,18,20,.74);
+  color: white;
+  cursor: pointer;
+  font-size: 1.5rem;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 180ms ease, transform 180ms ease;
+}
+.gallery-lightbox__top-actions .gallery-lightbox__close:hover {
+  background: rgba(242, 22, 50, 0.85);
+  transform: scale(1.05);
+}
+.gallery-lightbox__top-download {
+  display: inline-flex;
+  align-items: center;
+  gap: .45rem;
+  height: 2.7rem;
+  padding: 0 1.1rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(16, 18, 20, 0.88);
+  color: #ffffff;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: .78rem;
+  font-weight: 600;
+  cursor: pointer;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  transition: background 180ms ease, border-color 180ms ease, transform 180ms ease;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.gallery-lightbox__top-download:hover {
+  background: rgba(242, 22, 50, 0.9);
+  border-color: transparent;
+  transform: translateY(-1px);
+}
+.gallery-lightbox__top-download:active {
+  transform: scale(0.96);
+}
+.gallery-lightbox__top-download svg {
+  width: 1.05rem;
+  height: 1.05rem;
+  flex-shrink: 0;
+}
+.gallery-lightbox__top-download .gallery-spinner {
+  width: 14px;
+  height: 14px;
+  border-width: 2px;
+}
+.gallery-lightbox__close, .gallery-lightbox__nav { position: absolute; z-index: 2; display: grid; width: 2.7rem; height: 2.7rem; place-items: center; border: 1px solid rgba(255,255,255,.34); border-radius: 50%; background: rgba(16,18,20,.74); color: white; cursor: pointer; font-size: 1.6rem; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
 .gallery-lightbox__close { top: .2rem; right: .2rem; }
 .gallery-lightbox__nav { top: 50%; transform: translateY(-50%); font-size: 2rem; }
 .gallery-lightbox__nav--previous { left: .2rem; }
@@ -604,12 +674,12 @@
     left: .3rem;
     right: auto;
     border-radius: 999px;
-    max-width: calc(100% - 2.1rem);
+    max-width: calc(100% - 2.45rem);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     line-height: 1.15;
-    z-index: 4;
+    z-index: 6;
   }
   .gallery-client__check {
     width: 1.6rem;
@@ -617,31 +687,38 @@
     font-size: .88rem;
     top: .3rem;
     right: .3rem;
-    z-index: 5;
+    z-index: 8;
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
   }
   .gallery-client__download-btn {
-    width: 1.6rem;
-    height: 1.6rem;
+    width: 1.75rem;
+    height: 1.75rem;
     bottom: .3rem;
     right: .3rem;
     border-radius: 6px;
-    z-index: 5;
+    z-index: 8;
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
+    -webkit-appearance: none;
+    appearance: none;
+    background: rgba(10, 12, 16, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    display: grid;
+    place-items: center;
   }
   .gallery-client__download-btn svg {
-    width: .85rem;
-    height: .85rem;
+    width: .9rem;
+    height: .9rem;
   }
   .gallery-photo-watermark {
-    padding-bottom: .4rem;
+    align-items: center;
+    padding-bottom: 0;
   }
   .gallery-photo-watermark__badge {
-    font-size: .38rem;
-    padding: .12rem .35rem;
-    letter-spacing: .06em;
+    font-size: .4rem;
+    padding: .14rem .42rem;
+    letter-spacing: .08em;
   }
   .gallery-client__photo-index {
     top: .3rem;
@@ -1095,31 +1172,43 @@
   position: absolute;
   bottom: .45rem;
   right: .45rem;
-  z-index: 3;
-  width: 2rem;
-  height: 2rem;
+  z-index: 10;
+  width: 2.1rem;
+  height: 2.1rem;
   display: grid;
   place-items: center;
   border-radius: 8px;
-  border: none;
+  border: 1px solid rgba(255, 255, 255, 0.22);
   outline: none;
   cursor: pointer;
-  background: rgba(10, 12, 15, 0.78);
+  background: rgba(10, 12, 15, 0.85);
   color: #ffffff;
   font-size: 1rem;
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255,255,255,0.1) inset;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
   transition: background 150ms ease, transform 150ms ease, box-shadow 150ms ease;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-appearance: none;
+  appearance: none;
 }
 .gallery-client__download-btn:hover {
   background: rgba(242, 22, 50, 0.9);
   transform: scale(1.08);
-  box-shadow: 0 3px 12px rgba(242, 22, 50, 0.4), 0 0 0 1px rgba(255,255,255,0.15) inset;
+  box-shadow: 0 3px 12px rgba(242, 22, 50, 0.4);
+}
+.gallery-client__download-btn:active {
+  transform: scale(0.96);
 }
 .gallery-client__download-btn svg {
   width: 1rem;
   height: 1rem;
+}
+.gallery-client__download-btn .gallery-spinner {
+  width: 14px;
+  height: 14px;
+  border-width: 2px;
 }
 
 /* ─── Botón de descarga en el lightbox ─── */
@@ -1132,27 +1221,147 @@
 .gallery-lightbox__download-btn {
   display: inline-flex;
   align-items: center;
-  gap: .4rem;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.07);
+  gap: .45rem;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
   color: #ffffff;
   font-family: 'Space Grotesk', sans-serif;
-  font-size: .78rem;
+  font-size: .76rem;
   font-weight: 600;
-  padding: .45rem .85rem;
+  padding: .5rem 1.05rem;
+  min-height: 42px;
   cursor: pointer;
-  transition: background 150ms ease, border-color 150ms ease;
+  transition: background 180ms ease, border-color 180ms ease, transform 180ms ease;
   white-space: nowrap;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-appearance: none;
+  appearance: none;
 }
 .gallery-lightbox__download-btn:hover {
-  background: rgba(242, 22, 50, 0.85);
+  background: rgba(242, 22, 50, 0.88);
   border-color: transparent;
+  transform: translateY(-1px);
+}
+.gallery-lightbox__download-btn:active {
+  transform: scale(0.96);
 }
 .gallery-lightbox__download-btn svg {
   width: 1rem;
   height: 1rem;
   flex-shrink: 0;
+}
+.gallery-lightbox__download-btn .gallery-spinner {
+  width: 14px;
+  height: 14px;
+  border-width: 2px;
+}
+
+/* ─── Mobile overrides para botones de descarga y lightbox ─── */
+@media (max-width: 760px) {
+  .gallery-client__download-btn {
+    width: 1.75rem;
+    height: 1.75rem;
+    bottom: .3rem;
+    right: .3rem;
+    border-radius: 6px;
+    z-index: 10;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-appearance: none;
+    appearance: none;
+    background: rgba(10, 12, 16, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    display: grid;
+    place-items: center;
+  }
+  .gallery-client__download-btn svg {
+    width: .9rem;
+    height: .9rem;
+  }
+  .gallery-lightbox {
+    padding: max(.6rem, env(safe-area-inset-top, .6rem)) .6rem max(.8rem, env(safe-area-inset-bottom, .8rem));
+  }
+  .gallery-lightbox.has-order-bar {
+    padding-bottom: calc(5.2rem + env(safe-area-inset-bottom, 0px));
+  }
+  .gallery-lightbox__top-actions {
+    top: max(.6rem, env(safe-area-inset-top, .6rem));
+    right: max(.6rem, env(safe-area-inset-right, .6rem));
+    gap: .45rem;
+  }
+  .gallery-lightbox__top-download {
+    height: 2.35rem;
+    padding: 0 .75rem;
+    font-size: .68rem;
+    gap: .35rem;
+  }
+  .gallery-lightbox__top-download svg {
+    width: .92rem;
+    height: .92rem;
+  }
+  .gallery-lightbox__top-actions .gallery-lightbox__close {
+    width: 2.35rem;
+    height: 2.35rem;
+    font-size: 1.35rem;
+  }
+  .gallery-lightbox__dialog {
+    width: 100%;
+    height: auto;
+    max-height: calc(100dvh - 2.5rem);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+  .gallery-lightbox.has-order-bar .gallery-lightbox__dialog {
+    max-height: calc(100dvh - 6.5rem);
+  }
+  .gallery-lightbox__media {
+    flex: 1 1 auto;
+    width: 100%;
+    height: auto;
+    max-height: calc(100dvh - 165px);
+    min-height: 0;
+  }
+  .gallery-lightbox.has-order-bar .gallery-lightbox__media {
+    max-height: calc(100dvh - 210px);
+  }
+  .gallery-lightbox__caption {
+    flex-direction: column;
+    align-items: center;
+    gap: .45rem;
+    padding-top: .5rem;
+    width: 100%;
+  }
+  .gallery-lightbox__caption > span {
+    font-size: .6rem;
+    color: #a4a7a8;
+    text-align: center;
+    max-width: 90%;
+  }
+  .gallery-lightbox__caption-actions {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: .5rem;
+    width: 100%;
+  }
+  .gallery-lightbox__select-button {
+    min-height: 38px;
+    padding: .45rem .85rem;
+    font-size: .68rem;
+    flex: 1 1 auto;
+    max-width: 160px;
+  }
+  .gallery-lightbox__download-btn {
+    min-height: 38px;
+    padding: .45rem .85rem;
+    font-size: .68rem;
+    flex: 1 1 auto;
+    max-width: 160px;
+    justify-content: center;
+  }
 }
 
 /* Ajuste de grid de botones admin para el nuevo botón de descarga */
