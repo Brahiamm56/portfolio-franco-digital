@@ -1221,7 +1221,7 @@ export async function getPublishedGallery(shareToken: string, forceFresh = false
       try {
         const { data: directGallery, error: directError } = await supabase!
           .from('photo_galleries')
-          .select('id, title, client_name, event_date, client_selected_photo_ids, cover_photo_id, gallery_photos(id, original_filename, storage_path, price_ars, has_watermark, allow_download)')
+          .select('id, title, client_name, event_date, client_selected_photo_ids, cover_photo_id, gallery_photos!gallery_photos_gallery_id_fkey(id, original_filename, storage_path, price_ars, has_watermark, allow_download)')
           .eq('share_token', shareToken)
           .eq('status', 'published')
           .maybeSingle()
