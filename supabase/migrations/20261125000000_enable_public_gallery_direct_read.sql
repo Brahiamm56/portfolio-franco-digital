@@ -1,10 +1,42 @@
--- Permite lectura y selección directa de galerías publicadas sin depender exclusivamente de Edge Functions
+-- 1. Agregar columnas faltantes con IF NOT EXISTS
+alter table public.gallery_photos
+  add column if not exists has_watermark boolean not null default true;
+
+alter table public.gallery_photos
+  add column if not exists allow_download boolean not null default true;
+
+alter table public.photo_galleries
+  add column if not exists client_selected_photo_ids uuid[] not null default '{}'::uuid[];
+
+alter table public.photo_galleries
+  add column if not exists cover_photo_id uuid references public.gallery_photos(id) on delete set null;
+
+-- 2. Permisos para usuarios anónimos (públicos)
 grant select (id, title, client_name, event_date, status, share_token, client_selected_photo_ids, cover_photo_id, created_at)
   on public.photo_galleries to anon;
 
 grant select (id, gallery_id, original_filename, storage_path, price_ars, has_watermark, allow_download, created_at)
   on public.gallery_photos to anon;
 
+grant update (client_selected_photo_ids)
+  on public.photo_galleries to anon;
+
+-- 3. Permisos para usuarios autenticados (admin)
+grant select on public.photo_galleries, public.gallery_photos to authenticated;
+
+grant insert (owner_id, title, client_name, event_date, status, share_token, cover_photo_id)
+  on public.photo_galleries to authenticated;
+
+grant update (status, cover_photo_id)
+  on public.photo_galleries to authenticated;
+
+grant insert (gallery_id, original_filename, storage_path, price_ars, has_watermark, allow_download)
+  on public.gallery_photos to authenticated;
+
+grant update (original_filename, has_watermark, allow_download)
+  on public.gallery_photos to authenticated;
+
+-- 4. Políticas RLS para lectura pública de galerías publicadas
 drop policy if exists "Public read published galleries" on public.photo_galleries;
 create policy "Public read published galleries"
   on public.photo_galleries for select to anon
@@ -19,14 +51,8 @@ create policy "Public read photos of published galleries"
       and photo_galleries.status = 'published'
   ));
 
-grant update (client_selected_photo_ids) on public.photo_galleries to anon;
-
 drop policy if exists "Public update selections of published galleries" on public.photo_galleries;
 create policy "Public update selections of published galleries"
   on public.photo_galleries for update to anon
   using (status = 'published')
   with check (status = 'published');
-
--- Asegurar permisos de inserción en gallery_photos para admins
-grant insert (gallery_id, original_filename, storage_path, price_ars, has_watermark, allow_download)
-  on public.gallery_photos to authenticated;
