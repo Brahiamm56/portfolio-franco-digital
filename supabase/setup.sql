@@ -145,14 +145,39 @@ revoke all on public.photo_galleries from public, anon, authenticated;
 revoke all on public.gallery_photos from public, anon, authenticated;
 grant select (user_id) on private.gallery_admins to authenticated;
 grant select on public.photo_galleries, public.gallery_photos to authenticated;
+grant select (id, title, client_name, event_date, status, share_token, client_selected_photo_ids, cover_photo_id, created_at)
+  on public.photo_galleries to anon;
+grant select (id, gallery_id, original_filename, storage_path, price_ars, has_watermark, allow_download, created_at)
+  on public.gallery_photos to anon;
 grant insert (owner_id, title, client_name, event_date, status, share_token, cover_photo_id)
   on public.photo_galleries to authenticated;
 grant update (status, cover_photo_id) on public.photo_galleries to authenticated;
+grant update (client_selected_photo_ids) on public.photo_galleries to anon;
 grant delete on public.photo_galleries to authenticated;
-grant insert (gallery_id, original_filename, storage_path, price_ars, has_watermark)
+grant insert (gallery_id, original_filename, storage_path, price_ars, has_watermark, allow_download)
   on public.gallery_photos to authenticated;
-grant update (original_filename, has_watermark) on public.gallery_photos to authenticated;
+grant update (original_filename, has_watermark, allow_download) on public.gallery_photos to authenticated;
 grant delete on public.gallery_photos to authenticated;
+
+drop policy if exists "Public read published galleries" on public.photo_galleries;
+create policy "Public read published galleries"
+  on public.photo_galleries for select to anon
+  using (status = 'published');
+
+drop policy if exists "Public read photos of published galleries" on public.gallery_photos;
+create policy "Public read photos of published galleries"
+  on public.gallery_photos for select to anon
+  using (exists (
+    select 1 from public.photo_galleries
+    where photo_galleries.id = gallery_photos.gallery_id
+      and photo_galleries.status = 'published'
+  ));
+
+drop policy if exists "Public update selections of published galleries" on public.photo_galleries;
+create policy "Public update selections of published galleries"
+  on public.photo_galleries for update to anon
+  using (status = 'published')
+  with check (status = 'published');
 
 drop policy if exists "Approved admins can view their own approval" on private.gallery_admins;
 create policy "Approved admins can view their own approval"

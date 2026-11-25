@@ -381,6 +381,28 @@ export async function listGalleries(): Promise<PhotoGallery[]> {
           return mapRemotePhoto(photo, path, String(row.id))
         }
         if (isCloudinaryConfigured) {
+          // Si Cloudinary está configurado, la URL visible es la de Cloudinary
+          // Verificamos en segundo plano que exista en Supabase Storage para que la Edge Function no falle
+          void (async () => {
+            try {
+              const { data: signed, error: signedError } = await supabase!.storage
+                .from(STORAGE_BUCKET)
+                .createSignedUrl(path, 60)
+              if (signedError || !signed) {
+                const cldRes = await fetch(buildCloudinaryUrl(path))
+                if (cldRes.ok) {
+                  const blob = await cldRes.blob()
+                  await supabase!.storage.from(STORAGE_BUCKET).upload(path, blob, {
+                    contentType: blob.type || 'image/jpeg',
+                    cacheControl: '31536000',
+                    upsert: true,
+                  })
+                }
+              }
+            } catch {
+              // Silencioso
+            }
+          })()
           return mapRemotePhoto(photo, buildCloudinaryUrl(path), String(row.id))
         }
         const { data: signed, error: signedError } = await supabase!.storage
@@ -557,16 +579,24 @@ export async function uploadGalleryCoverPhoto(galleryId: string, file: File) {
   const storagePath = `${userResult.user.id}/${galleryId}/${photoUuid}.${extension}`
 
   if (isCloudinaryConfigured) {
-    await uploadToCloudinary(optimized, {
-      publicId: `${userResult.user.id}/${galleryId}/${photoUuid}`,
-    })
-  } else {
+    try {
+      await uploadToCloudinary(optimized, {
+        publicId: `${userResult.user.id}/${galleryId}/${photoUuid}`,
+      })
+    } catch (cldErr) {
+      console.warn('Aviso al subir portada a Cloudinary:', cldErr)
+    }
+  }
+
+  try {
     const { error: uploadError } = await supabase!.storage.from(STORAGE_BUCKET).upload(storagePath, optimized, {
       contentType: optimized.type,
       cacheControl: '31536000',
-      upsert: false,
+      upsert: true,
     })
-    if (uploadError) throw uploadError
+    if (uploadError && !isCloudinaryConfigured) throw uploadError
+  } catch (storageErr) {
+    if (!isCloudinaryConfigured) throw storageErr
   }
 
   const { data: photoData, error: insertError } = await supabase!.from('gallery_photos').insert({
@@ -655,16 +685,24 @@ export async function addGalleryPhotos(
     const storagePath = `${userResult.user.id}/${galleryId}/${photoUuid}.${extension}`
 
     if (isCloudinaryConfigured) {
-      await uploadToCloudinary(optimized, {
-        publicId: `${userResult.user.id}/${galleryId}/${photoUuid}`,
-      })
-    } else {
+      try {
+        await uploadToCloudinary(optimized, {
+          publicId: `${userResult.user.id}/${galleryId}/${photoUuid}`,
+        })
+      } catch (cldErr) {
+        console.warn('Aviso al subir foto a Cloudinary:', cldErr)
+      }
+    }
+
+    try {
       const { error: uploadError } = await supabase!.storage.from(STORAGE_BUCKET).upload(storagePath, optimized, {
         contentType: optimized.type,
         cacheControl: '31536000',
-        upsert: false,
+        upsert: true,
       })
-      if (uploadError) throw uploadError
+      if (uploadError && !isCloudinaryConfigured) throw uploadError
+    } catch (storageErr) {
+      if (!isCloudinaryConfigured) throw storageErr
     }
 
     const hasWatermark = Array.isArray(watermarks)
@@ -1179,6 +1217,69 @@ export async function getPublishedGallery(shareToken: string, forceFresh = false
 
       ensureSupabaseConfigured()
 
+      // Intento 1: Consulta directa a Supabase (permite ver galerías de inmediato si se habilitó acceso público por SQL)
+      try {
+        const { data: directGallery, error: directError } = await supabase!
+          .from('photo_galleries')
+          .select('id, title, client_name, event_date, client_selected_photo_ids, cover_photo_id, gallery_photos(id, original_filename, storage_path, price_ars, has_watermark, allow_download)')
+          .eq('share_token', shareToken)
+          .eq('status', 'published')
+          .maybeSingle()
+
+        if (!directError && directGallery) {
+          const rawPhotos = ((directGallery as Record<string, unknown>).gallery_photos ?? []) as Array<Record<string, unknown>>
+          const photos: GalleryPhoto[] = rawPhotos.map((p) => {
+            const rawName = String(p.original_filename ?? '')
+            const path = String(p.storage_path ?? '')
+            let hasWatermark = typeof p.has_watermark === 'boolean'
+              ? p.has_watermark
+              : !rawName.includes('[SIN_MARCA]')
+            if (typeof window !== 'undefined') {
+              const wmCached = localStorage.getItem(`gallery-photo-wm-${p.id}`)
+              if (wmCached !== null) hasWatermark = wmCached === '1'
+            }
+            let allowDownload = typeof p.allow_download === 'boolean'
+              ? p.allow_download
+              : !rawName.includes('[SIN_DESCARGA]')
+            if (typeof window !== 'undefined') {
+              const dlCached = localStorage.getItem(`gallery-photo-dl-${p.id}`)
+              if (dlCached !== null) allowDownload = dlCached === '1'
+              else {
+                const galleryAll = localStorage.getItem(`gallery-dl-all-${directGallery.id}`)
+                if (galleryAll !== null) allowDownload = galleryAll === '1'
+              }
+            }
+            const url = isCloudinaryConfigured && path ? buildCloudinaryUrl(path) : path
+            return {
+              id: String(p.id),
+              filename: cleanPhotoFilename(rawName),
+              priceArs: Number(p.price_ars ?? 0),
+              hasWatermark,
+              allowDownload,
+              url,
+              storagePath: path,
+            }
+          })
+          const localCover = typeof window !== 'undefined' ? localStorage.getItem(`gallery-cover-${directGallery.id}`) : null
+          const coverPhoto = resolveGalleryCoverPhoto(photos, (directGallery.cover_photo_id as string) || localCover)
+          const result: PublicPhotoGallery = {
+            id: String(directGallery.id),
+            title: String(directGallery.title),
+            clientName: String(directGallery.client_name),
+            eventDate: String(directGallery.event_date ?? ''),
+            clientSelectedPhotoIds: (directGallery.client_selected_photo_ids as string[]) ?? [],
+            coverPhotoId: coverPhoto?.id ?? null,
+            coverPhotoUrl: coverPhoto?.url ?? null,
+            photos,
+          }
+          publishedGalleryCache.set(shareToken, { data: result, timestamp: Date.now() })
+          return result
+        }
+      } catch (directErr) {
+        console.debug('Consulta directa no disponible, usando Edge Function:', directErr)
+      }
+
+      // Intento 2: Invocación a Edge Function
       const { data, error } = await supabase!.functions.invoke('public-gallery', { body: { token: shareToken } })
       if (error) throw error
       const rawGallery = data?.gallery
@@ -1306,6 +1407,17 @@ export async function saveGalleryPhotoSelections(shareToken: string, photoIds: s
   }
   ensureSupabaseConfigured()
 
+  try {
+    const { error: directErr } = await supabase!
+      .from('photo_galleries')
+      .update({ client_selected_photo_ids: uniquePhotoIds })
+      .eq('share_token', shareToken)
+      .eq('status', 'published')
+    if (!directErr) return
+  } catch {
+    // Fallback a Edge Function
+  }
+
   const { error } = await supabase!.functions.invoke('public-gallery', {
     body: { action: 'save-selections', token: shareToken, photoIds: uniquePhotoIds },
   })
@@ -1355,6 +1467,46 @@ export async function listPublishedGalleries(forceFresh = false): Promise<Publis
       }
 
       ensureSupabaseConfigured()
+
+      try {
+        const { data: directGalleries, error: directError } = await supabase!
+          .from('photo_galleries')
+          .select('id, title, client_name, event_date, share_token, cover_photo_id, created_at, gallery_photos(id, storage_path)')
+          .eq('status', 'published')
+          .order('created_at', { ascending: false })
+          .limit(100)
+
+        if (!directError && directGalleries && directGalleries.length > 0) {
+          const links: PublishedGalleryLink[] = directGalleries.map((gallery: any) => {
+            const rawPhotos = (gallery.gallery_photos ?? []) as Array<Record<string, unknown>>
+            const previewPhotos = rawPhotos.slice(0, 4).map((p) => {
+              const path = String(p.storage_path ?? '')
+              const url = isCloudinaryConfigured && path ? buildCloudinaryUrl(path) : path
+              return { id: String(p.id), url }
+            })
+            const localCover = typeof window !== 'undefined' ? localStorage.getItem(`gallery-cover-${gallery.id}`) : null
+            const cover = resolveGalleryCoverPhoto(previewPhotos, gallery.cover_photo_id || localCover)
+            const orderedPreviews = cover
+              ? [cover, ...previewPhotos.filter((p) => p.id !== cover.id)]
+              : previewPhotos
+            return {
+              id: String(gallery.id),
+              title: String(gallery.title),
+              clientName: String(gallery.client_name ?? ''),
+              eventDate: String(gallery.event_date ?? ''),
+              shareToken: String(gallery.share_token),
+              createdAt: String(gallery.created_at),
+              photoCount: rawPhotos.length,
+              coverPhotoUrl: cover?.url ?? orderedPreviews[0]?.url ?? null,
+              previewPhotos: orderedPreviews,
+            }
+          })
+          publishedListCache = { data: links, timestamp: Date.now() }
+          return links
+        }
+      } catch {
+        // Fallback a Edge Function
+      }
 
       const { data, error } = await supabase!.functions.invoke('public-gallery', { body: { action: 'list' } })
       if (error) throw error
