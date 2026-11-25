@@ -41,9 +41,20 @@ El contenido de la pantalla actual es provisional: sirve como dirección visual 
 
 El panel está disponible en `/admin` y las galerías compartibles usan `/galeria/<token>`. Solo en desarrollo local, si faltan las credenciales de Supabase, funciona el modo demo del navegador con datos en `localStorage` e IndexedDB. En producción la conexión ausente bloquea el panel y las operaciones de galerías.
 
-### Supabase configurado
+### Supabase y Cloudinary configurados
 
-El proyecto `franco-digital-galerias` ya está creado en la región de São Paulo. El esquema, el bucket privado y la función Edge `public-gallery` ya están aplicados. La configuración local está en `.env.local` (ignorada por Git); para publicar el sitio, cargá `VITE_SUPABASE_URL` y `VITE_SUPABASE_PUBLISHABLE_KEY` como variables de entorno en Vercel.
+El almacenamiento y base de datos se dividen de forma óptima:
+- **Base de datos y autenticación:** Supabase (PostgreSQL con RLS + Supabase Auth).
+- **Almacenamiento y CDN de fotos:** Cloudinary (entorno `jc0ydnsy` con el preset `franco_digital_unsigned` para subida directa, compresión `f_auto,q_auto` y entrega global ultra rápida).
+
+La configuración local está en `.env.local` (ignorada por Git); para publicar el sitio, cargá las siguientes variables de entorno en Vercel:
+
+```bash
+VITE_SUPABASE_URL=https://tiyxvmbiiaqdztxatrbs.supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_UgrYsMRYVIvAxUb6OwGccA_zujxaVGs
+VITE_CLOUDINARY_CLOUD_NAME=jc0ydnsy
+VITE_CLOUDINARY_UPLOAD_PRESET=franco_digital_unsigned
+```
 
 Antes de usar el panel:
 

@@ -137,6 +137,7 @@ const handleRequest = withSupabase({ auth: 'publishable' }, async (request, cont
       .limit(100)
 
     if (error) return json({ error: 'No pudimos cargar las galerías.' }, 500)
+    const cloudName = Deno.env.get('CLOUDINARY_CLOUD_NAME') || 'jc0ydnsy'
     const galleriesWithPreviews = await Promise.all((galleries ?? []).map(async (gallery) => {
       const { data: photos, count: totalPhotos, error: photosError } = await context.supabaseAdmin
         .from('gallery_photos')
@@ -147,10 +148,19 @@ const handleRequest = withSupabase({ auth: 'publishable' }, async (request, cont
 
       if (photosError) return null
       const previewPhotos = await Promise.all((photos ?? []).map(async (photo) => {
-        const { data, error: urlError } = await context.supabaseAdmin.storage
-          .from('gallery-photos')
-          .createSignedUrl(photo.storage_path, 1800)
-        return urlError ? null : { id: photo.id, url: data.signedUrl }
+        const path = String(photo.storage_path ?? '')
+        let photoUrl: string | null = null
+        if (path.startsWith('http://') || path.startsWith('https://')) {
+          photoUrl = path
+        } else if (cloudName) {
+          photoUrl = `https://res.cloudinary.com/${cloudName}/image/upload/f_auto,q_auto,w_800/${path}`
+        } else {
+          const { data, error: urlError } = await context.supabaseAdmin.storage
+            .from('gallery-photos')
+            .createSignedUrl(path, 1800)
+          photoUrl = urlError ? null : data.signedUrl
+        }
+        return photoUrl ? { id: photo.id, url: photoUrl } : null
       }))
 
       return {
@@ -210,11 +220,24 @@ const handleRequest = withSupabase({ auth: 'publishable' }, async (request, cont
     .order('created_at', { ascending: true })
   if (photosError) return json({ error: 'No pudimos cargar las fotos.' }, 500)
 
+  const cloudName = Deno.env.get('CLOUDINARY_CLOUD_NAME') || 'jc0ydnsy'
+
   const signedPhotos = await Promise.all((photos ?? []).map(async (photo) => {
-    const { data, error } = await context.supabaseAdmin.storage
-      .from('gallery-photos')
-      .createSignedUrl(photo.storage_path, 1800)
-    if (error) return null
+    const path = String(photo.storage_path ?? '')
+    let photoUrl = ''
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      photoUrl = path
+    } else if (cloudName) {
+      photoUrl = `https://res.cloudinary.com/${cloudName}/image/upload/f_auto,q_auto/${path}`
+    } else {
+      const { data, error } = await context.supabaseAdmin.storage
+        .from('gallery-photos')
+        .createSignedUrl(path, 1800)
+      if (!error && data?.signedUrl) {
+        photoUrl = data.signedUrl
+      }
+    }
+    if (!photoUrl) return null
     const rawName = String(photo.original_filename ?? '')
     const photoRecord = photo as Record<string, unknown>
     const hasWatermark = typeof photoRecord.has_watermark === 'boolean'
@@ -230,7 +253,7 @@ const handleRequest = withSupabase({ auth: 'publishable' }, async (request, cont
       priceArs: photo.price_ars,
       hasWatermark,
       allowDownload,
-      url: data.signedUrl,
+      url: photoUrl,
     }
   }))
 

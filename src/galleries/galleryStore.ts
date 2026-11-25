@@ -1,4 +1,5 @@
 import { isSupabaseConfigured, supabase } from './supabaseClient'
+import { isCloudinaryConfigured, uploadToCloudinary, buildCloudinaryUrl } from './cloudinaryClient'
 
 const STORAGE_BUCKET = 'gallery-photos'
 const LOCAL_GALLERIES_KEY = 'franco-digital-galleries-v1'
@@ -313,11 +314,14 @@ export async function listGalleries(): Promise<PhotoGallery[]> {
           const dlCached = localStorage.getItem(`gallery-photo-dl-${photo.id}`)
           if (dlCached !== null) allowDownload = dlCached === '1'
         }
+        const url = (photo.storagePath && (photo.storagePath.startsWith('http://') || photo.storagePath.startsWith('https://')))
+          ? photo.storagePath
+          : (asset ? URL.createObjectURL(asset) : '')
         return {
           ...photo,
           hasWatermark,
           allowDownload,
-          url: asset ? URL.createObjectURL(asset) : '',
+          url,
         }
       }))
       const coverPhoto = resolveGalleryCoverPhoto(photos, gallery.coverPhotoId)
@@ -372,9 +376,16 @@ export async function listGalleries(): Promise<PhotoGallery[]> {
     const rawPhotos = (row.gallery_photos ?? []) as Array<Record<string, unknown>>
     const photos = await Promise.all(rawPhotos.map(async (photo) => {
       try {
+        const path = String(photo.storage_path ?? '')
+        if (path.startsWith('http://') || path.startsWith('https://')) {
+          return mapRemotePhoto(photo, path, String(row.id))
+        }
+        if (isCloudinaryConfigured) {
+          return mapRemotePhoto(photo, buildCloudinaryUrl(path), String(row.id))
+        }
         const { data: signed, error: signedError } = await supabase!.storage
           .from(STORAGE_BUCKET)
-          .createSignedUrl(String(photo.storage_path), 1800)
+          .createSignedUrl(path, 1800)
         if (signedError || !signed) {
           console.warn('Aviso al obtener enlace firmado:', signedError?.message)
           return mapRemotePhoto(photo, '', String(row.id))
@@ -514,8 +525,19 @@ export async function uploadGalleryCoverPhoto(galleryId: string, file: File) {
     const gallery = galleries.find((item) => item.id === galleryId)
     if (!gallery) throw new Error('No encontramos esta galería.')
     const photoId = crypto.randomUUID()
-    await putDemoAsset(photoId, file)
-    const newPhoto = { id: photoId, filename: `[PORTADA] ${file.name}`, priceArs: 0, storagePath: photoId }
+    let assetUrl = ''
+    if (isCloudinaryConfigured) {
+      try {
+        const cld = await uploadToCloudinary(file, { folder: `demo/${galleryId}`, publicId: photoId })
+        assetUrl = cld.secureUrl
+      } catch (cldErr) {
+        console.warn('Fallo upload Cloudinary en demo, usando IndexedDB:', cldErr)
+      }
+    }
+    if (!assetUrl) {
+      await putDemoAsset(photoId, file)
+    }
+    const newPhoto = { id: photoId, filename: `[PORTADA] ${file.name}`, priceArs: 0, storagePath: assetUrl || photoId }
     gallery.photos.unshift(newPhoto)
     gallery.coverPhotoId = photoId
     writeLocalGalleries(galleries)
@@ -531,14 +553,21 @@ export async function uploadGalleryCoverPhoto(galleryId: string, file: File) {
 
   const optimized = await optimizeImageForWeb(file)
   const extension = photoExtensions[optimized.type] ?? 'jpg'
-  const storagePath = `${userResult.user.id}/${galleryId}/${crypto.randomUUID()}.${extension}`
+  const photoUuid = crypto.randomUUID()
+  const storagePath = `${userResult.user.id}/${galleryId}/${photoUuid}.${extension}`
 
-  const { error: uploadError } = await supabase!.storage.from(STORAGE_BUCKET).upload(storagePath, optimized, {
-    contentType: optimized.type,
-    cacheControl: '31536000',
-    upsert: false,
-  })
-  if (uploadError) throw uploadError
+  if (isCloudinaryConfigured) {
+    await uploadToCloudinary(optimized, {
+      publicId: `${userResult.user.id}/${galleryId}/${photoUuid}`,
+    })
+  } else {
+    const { error: uploadError } = await supabase!.storage.from(STORAGE_BUCKET).upload(storagePath, optimized, {
+      contentType: optimized.type,
+      cacheControl: '31536000',
+      upsert: false,
+    })
+    if (uploadError) throw uploadError
+  }
 
   const { data: photoData, error: insertError } = await supabase!.from('gallery_photos').insert({
     gallery_id: galleryId,
@@ -548,8 +577,11 @@ export async function uploadGalleryCoverPhoto(galleryId: string, file: File) {
   }).select('id').single()
 
   if (insertError) {
-    await supabase!.storage.from(STORAGE_BUCKET).remove([storagePath])
-    throw insertError
+    if (!isCloudinaryConfigured) {
+      await supabase!.storage.from(STORAGE_BUCKET).remove([storagePath])
+    }
+    const errMsg = insertError.message || insertError.details || 'Error al guardar la foto de portada.'
+    throw new Error(errMsg)
   }
 
   const photoId = photoData.id as string
@@ -586,7 +618,18 @@ export async function addGalleryPhotos(
     for (const [index, file] of files.entries()) {
       const optimized = await optimizeImageForWeb(file)
       const id = crypto.randomUUID()
-      await putDemoAsset(id, optimized)
+      let assetUrl = ''
+      if (isCloudinaryConfigured) {
+        try {
+          const cld = await uploadToCloudinary(optimized, { folder: `demo/${galleryId}`, publicId: id })
+          assetUrl = cld.secureUrl
+        } catch (cldErr) {
+          console.warn('Fallo upload Cloudinary en demo, usando IndexedDB:', cldErr)
+        }
+      }
+      if (!assetUrl) {
+        await putDemoAsset(id, optimized)
+      }
       const hasWatermark = Array.isArray(watermarks)
         ? (watermarks[index] ?? true)
         : (typeof watermarks === 'boolean' ? watermarks : true)
@@ -595,7 +638,7 @@ export async function addGalleryPhotos(
         localStorage.setItem(`gallery-photo-wm-${id}`, hasWatermark ? '1' : '0')
         localStorage.setItem(`gallery-photo-dl-${id}`, '1')
       }
-      additions.push({ id, filename, priceArs, storagePath: id, hasWatermark, allowDownload: true })
+      additions.push({ id, filename, priceArs, storagePath: assetUrl || id, hasWatermark, allowDownload: true })
     }
     gallery.photos.push(...additions)
     writeLocalGalleries(galleries)
@@ -608,13 +651,21 @@ export async function addGalleryPhotos(
   for (const [index, file] of files.entries()) {
     const optimized = await optimizeImageForWeb(file)
     const extension = photoExtensions[optimized.type] ?? 'jpg'
-    const storagePath = `${userResult.user.id}/${galleryId}/${crypto.randomUUID()}.${extension}`
-    const { error: uploadError } = await supabase!.storage.from(STORAGE_BUCKET).upload(storagePath, optimized, {
-      contentType: optimized.type,
-      cacheControl: '31536000',
-      upsert: false,
-    })
-    if (uploadError) throw uploadError
+    const photoUuid = crypto.randomUUID()
+    const storagePath = `${userResult.user.id}/${galleryId}/${photoUuid}.${extension}`
+
+    if (isCloudinaryConfigured) {
+      await uploadToCloudinary(optimized, {
+        publicId: `${userResult.user.id}/${galleryId}/${photoUuid}`,
+      })
+    } else {
+      const { error: uploadError } = await supabase!.storage.from(STORAGE_BUCKET).upload(storagePath, optimized, {
+        contentType: optimized.type,
+        cacheControl: '31536000',
+        upsert: false,
+      })
+      if (uploadError) throw uploadError
+    }
 
     const hasWatermark = Array.isArray(watermarks)
       ? (watermarks[index] ?? true)
@@ -626,8 +677,9 @@ export async function addGalleryPhotos(
       original_filename: originalFilename,
       storage_path: storagePath,
       price_ars: priceArs,
-      has_watermark: hasWatermark,
-      allow_download: true,
+    }
+    if (typeof hasWatermark === 'boolean') {
+      insertPayload.has_watermark = hasWatermark
     }
 
     let { data: inserted, error: insertError } = await supabase!
@@ -636,25 +688,31 @@ export async function addGalleryPhotos(
       .select('id')
       .single()
 
-    if (insertError && (insertError.message?.includes('allow_download') || insertError.message?.includes('has_watermark'))) {
-      if (insertError.message?.includes('allow_download')) {
-        delete insertPayload.allow_download
-      }
-      if (insertError.message?.includes('has_watermark')) {
-        delete insertPayload.has_watermark
+    if (insertError) {
+      // Reintentar con el payload mínimo por si has_watermark o allow_download no tienen permiso en el esquema
+      const minimalPayload = {
+        gallery_id: galleryId,
+        original_filename: originalFilename,
+        storage_path: storagePath,
+        price_ars: priceArs,
       }
       const retry = await supabase!
         .from('gallery_photos')
-        .insert(insertPayload as never)
+        .insert(minimalPayload as never)
         .select('id')
         .single()
-      insertError = retry.error
-      inserted = retry.data
+      if (!retry.error) {
+        insertError = null
+        inserted = retry.data
+      }
     }
 
     if (insertError) {
-      await supabase!.storage.from(STORAGE_BUCKET).remove([storagePath])
-      throw insertError
+      if (!isCloudinaryConfigured) {
+        await supabase!.storage.from(STORAGE_BUCKET).remove([storagePath])
+      }
+      const errMsg = insertError.message || insertError.details || 'Error al registrar la foto en la base de datos.'
+      throw new Error(errMsg)
     }
 
     if (inserted?.id && typeof window !== 'undefined') {
@@ -1091,13 +1149,17 @@ export async function getPublishedGallery(shareToken: string, forceFresh = false
               if (galleryAll !== null) allowDownload = galleryAll === '1'
             }
           }
+          const storagePath = photo.storagePath || ''
+          const url = (storagePath && (storagePath.startsWith('http://') || storagePath.startsWith('https://')))
+            ? storagePath
+            : (asset ? URL.createObjectURL(asset) : '')
           return {
             id: photo.id,
             filename: cleanPhotoFilename(photo.filename),
             priceArs: photo.priceArs,
             hasWatermark,
             allowDownload,
-            url: asset ? URL.createObjectURL(asset) : '',
+            url,
           }
         }))
         const coverPhoto = resolveGalleryCoverPhoto(photos, gallery.coverPhotoId)
@@ -1122,7 +1184,7 @@ export async function getPublishedGallery(shareToken: string, forceFresh = false
       const rawGallery = data?.gallery
       if (!rawGallery) return null
 
-      const rawPhotos = (rawGallery.photos ?? []) as Array<{ id: string; filename: string; priceArs: number; url: string; hasWatermark?: boolean; allowDownload?: boolean }>
+      const rawPhotos = (rawGallery.photos ?? []) as Array<{ id: string; filename: string; priceArs: number; url: string; hasWatermark?: boolean; allowDownload?: boolean; storage_path?: string; storagePath?: string }>
       const photos = rawPhotos.map((p) => {
         const rawName = String(p.filename ?? '')
         let hasWatermark = typeof p.hasWatermark === 'boolean'
@@ -1147,8 +1209,11 @@ export async function getPublishedGallery(shareToken: string, forceFresh = false
             if (galleryAll !== null) allowDownload = galleryAll === '1'
           }
         }
+        const storagePath = p.storage_path || p.storagePath || ''
+        const url = p.url || (isCloudinaryConfigured && storagePath ? buildCloudinaryUrl(storagePath) : '')
         return {
           ...p,
+          url,
           hasWatermark,
           allowDownload,
           filename: cleanPhotoFilename(rawName),
@@ -1194,6 +1259,13 @@ export async function refreshGalleryPhotosForExport(galleryId: string): Promise<
   if (error) throw error
 
   return Promise.all((data ?? []).map(async (photo) => {
+    const path = String(photo.storage_path ?? '')
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      return mapRemotePhoto(photo, path, galleryId)
+    }
+    if (isCloudinaryConfigured) {
+      return mapRemotePhoto(photo, buildCloudinaryUrl(path), galleryId)
+    }
     const { data: signed, error: signedError } = await supabase!.storage
       .from(STORAGE_BUCKET)
       .createSignedUrl(photo.storage_path, 3600)
